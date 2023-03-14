@@ -67,7 +67,7 @@ func (suite *WebhookTestSuite) TestProcessWebhookPRReview() {
 			},
 		},
 	}
-	
+
 	l := logrus.WithField("test", t.Name())
 	logrusEntry, message, err := suite.Controller.ProcessWebHook(l, webhook)
 
@@ -87,8 +87,12 @@ func (suite *WebhookTestSuite) TestParseWebHook() {
 	r, err := http.NewRequest("POST", "/", bytes.NewReader(pingBytes))
 	assert.NoError(t, err)
 
+	r.Header.Add("X-GitHub-Delivery", "27579b2c-c262-11ed-90c1-3124ac07309e")
+	r.Header.Add("X-GitHub-Event", "push")
+
 	suite.Controller.DefaultHandler(w, r)
 
+	assert.Equal(t, http.StatusOK, w.StatusCode)
 }
 
 func (suite *WebhookTestSuite) SetupSuite() {
