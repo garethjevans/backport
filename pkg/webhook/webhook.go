@@ -40,6 +40,7 @@ func (o *Controller) Ready(w http.ResponseWriter, r *http.Request) {
 // DefaultHandler responds to requests without a specific handler
 func (o *Controller) DefaultHandler(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	fmt.Println("Is logging working?")
 	logrus.Infof("Got request on '%s'", path)
 	if path == o.path || strings.HasPrefix(path, o.path+"/") {
 		o.HandleWebhookRequests(w, r)
@@ -47,6 +48,7 @@ func (o *Controller) DefaultHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	path = strings.TrimPrefix(path, "/")
 	if path == "" || path == "index.html" {
+
 		return
 	}
 	http.Error(w, fmt.Sprintf("unknown path %s", path), http.StatusNotFound)
