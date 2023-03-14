@@ -18,7 +18,7 @@ func main() {
 
 	controller := webhook.Controller{}
 
-	r.Get("/", controller.DefaultHandler)
+	r.Get("", controller.DefaultHandler)
 	r.Get("/health", controller.Health)
 	r.Get("/ready", controller.Ready)
 
