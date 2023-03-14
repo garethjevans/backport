@@ -183,7 +183,7 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 
 		l.Info("invoking Issue Comment handler")
 
-		//o.handleIssueCommentEvent(l, *issueCommentHook)
+		o.handleIssueCommentEvent(l, *issueCommentHook)
 		return l, "processed issue comment hook", nil
 	}
 	prCommentHook, ok := webhook.(*scm.PullRequestCommentHook)
@@ -204,8 +204,6 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 		fields["Author.Avatar"] = author.Avatar
 
 		l.Info("invoking PR Comment handler")
-
-		l.Info("invoking Issue Comment handler")
 
 		o.handlePullRequestCommentEvent(l, *prCommentHook)
 		return l, "processed PR comment hook", nil
@@ -241,8 +239,20 @@ func (o *Controller) handlePullRequestCommentEvent(l *logrus.Entry, hook scm.Pul
 	l.Infof("handling comment on PR-%d", hook.PullRequest.Number)
 	l.Infof("new comment '%s'", hook.Comment.Body)
 
-	commentBody := hook.Comment.Body
-	commentLines := strings.Split(commentBody, "\n")
+	body := hook.Comment.Body
+	o.handleComment(l, body)
+}
+
+func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueCommentHook) {
+	l.Infof("handling comment on Issue %d", hook.Issue.Number)
+	l.Infof("new comment '%s'", hook.Comment.Body)
+
+	body := hook.Comment.Body
+	o.handleComment(l, body)
+}
+
+func (o *Controller) handleComment(l *logrus.Entry, body string) {
+	commentLines := strings.Split(body, "\n")
 	for _, line := range commentLines {
 		if strings.HasPrefix(line, "/backport") {
 			l.Infof("we are interested in this line '%s'", line)
