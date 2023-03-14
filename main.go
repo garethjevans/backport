@@ -18,9 +18,14 @@ func main() {
 
 	controller := webhook.Controller{}
 
-	r.Get("", controller.DefaultHandler)
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("backport is alive"))
+	})
+
 	r.Get("/health", controller.Health)
 	r.Get("/ready", controller.Ready)
+
+	r.Post("/", controller.DefaultHandler)
 
 	http.ListenAndServe(fmt.Sprintf(":%s", port()), r)
 }
