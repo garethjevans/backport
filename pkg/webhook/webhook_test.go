@@ -17,46 +17,46 @@ import (
 
 type WebhookTestSuite struct {
 	suite.Suite
-	SCMCLient  scm.Client
+	SCMClient  scm.Client
 	Controller *webhook.Controller
 	TestRepo   scm.Repository
 }
 
 func (suite *WebhookTestSuite) TestProcessWebhookPRComment() {
 	t := suite.T()
-	webhook := &scm.PullRequestCommentHook{
+	w := &scm.PullRequestCommentHook{
 		Action: scm.ActionUpdate,
 		Repo:   suite.TestRepo,
 	}
 
 	l := logrus.WithField("test", t.Name())
-	logrusEntry, message, err := suite.Controller.ProcessWebHook(l, webhook)
+	entry, message, err := suite.Controller.ProcessWebHook(l, w)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "processed PR comment hook", message)
-	assert.NotNil(t, logrusEntry)
+	assert.NotNil(t, entry)
 }
 
 func (suite *WebhookTestSuite) TestProcessWebhookPR() {
 	t := suite.T()
 
-	webhook := &scm.PullRequestHook{
+	w := &scm.PullRequestHook{
 		Action: scm.ActionCreate,
 		Repo:   suite.TestRepo,
 	}
 
 	l := logrus.WithField("test", t.Name())
-	logrusEntry, message, err := suite.Controller.ProcessWebHook(l, webhook)
+	entry, message, err := suite.Controller.ProcessWebHook(l, w)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "processed PR hook", message)
-	assert.NotNil(t, logrusEntry)
+	assert.NotNil(t, entry)
 }
 
 func (suite *WebhookTestSuite) TestProcessWebhookPRReview() {
 	t := suite.T()
 
-	webhook := &scm.ReviewHook{
+	w := &scm.ReviewHook{
 		Action: scm.ActionSubmitted,
 		Repo:   suite.TestRepo,
 		Review: scm.Review{
@@ -69,11 +69,11 @@ func (suite *WebhookTestSuite) TestProcessWebhookPRReview() {
 	}
 
 	l := logrus.WithField("test", t.Name())
-	logrusEntry, message, err := suite.Controller.ProcessWebHook(l, webhook)
+	entry, message, err := suite.Controller.ProcessWebHook(l, w)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "processed PR review hook", message)
-	assert.NotNil(t, logrusEntry)
+	assert.NotNil(t, entry)
 }
 
 func (suite *WebhookTestSuite) TestParseWebHook() {
@@ -108,6 +108,6 @@ func (suite *WebhookTestSuite) SetupSuite() {
 }
 
 func TestWebhookTestSuite(t *testing.T) {
-	os.Setenv("GIT_TOKEN", "abc123")
+	assert.NoError(t, os.Setenv("GIT_TOKEN", "abc123"))
 	suite.Run(t, new(WebhookTestSuite))
 }

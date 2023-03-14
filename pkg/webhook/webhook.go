@@ -12,18 +12,16 @@ import (
 )
 
 // Controller holds the command line arguments
-type Controller struct {
-	path string
-}
+type Controller struct{}
 
 // Health returns either HTTP 204 if the service is healthy, otherwise nothing ('cos it's dead).
-func (o *Controller) Health(w http.ResponseWriter, r *http.Request) {
+func (o *Controller) Health(w http.ResponseWriter, _ *http.Request) {
 	logrus.Debug("Health check")
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // Ready returns either HTTP 204 if the service is Ready to serve requests, otherwise HTTP 503.
-func (o *Controller) Ready(w http.ResponseWriter, r *http.Request) {
+func (o *Controller) Ready(w http.ResponseWriter, _ *http.Request) {
 	logrus.Debug("Ready check")
 	if o.isReady() {
 		w.WriteHeader(http.StatusNoContent)
@@ -32,26 +30,9 @@ func (o *Controller) Ready(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Metrics returns the prometheus metrics
-// func (o *Controller) Metrics(w http.ResponseWriter, r *http.Request) {
-// 	promhttp.Handler().ServeHTTP(w, r)
-// }
-
 // DefaultHandler responds to requests without a specific handler
 func (o *Controller) DefaultHandler(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	fmt.Println("Is logging working?")
-	logrus.Infof("Got request on '%s'", path)
-	if path == o.path || strings.HasPrefix(path, o.path+"/") {
-		o.HandleWebhookRequests(w, r)
-		return
-	}
-	path = strings.TrimPrefix(path, "/")
-	if path == "" || path == "index.html" {
-
-		return
-	}
-	http.Error(w, fmt.Sprintf("unknown path %s", path), http.StatusNotFound)
+	o.HandleWebhookRequests(w, r)
 }
 
 func (o *Controller) isReady() bool {
@@ -226,7 +207,7 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 
 		l.Info("invoking Issue Comment handler")
 
-		//o.handlePullRequestCommentEvent(l, *prCommentHook)
+		o.handlePullRequestCommentEvent(l, *prCommentHook)
 		return l, "processed PR comment hook", nil
 	}
 	prReviewHook, ok := webhook.(*scm.ReviewHook)
@@ -246,15 +227,27 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 
 		l.Info("invoking PR Review handler")
 
-		//o.handleReviewEvent(l, *prReviewHook)
 		return l, "processed PR review hook", nil
 	}
 	l.Debugf("unknown kind %s webhook %#v", webhook.Kind(), webhook)
 	return l, fmt.Sprintf("unknown hook %s", webhook.Kind()), nil
 }
 
-func (o *Controller) secretFn(webhook scm.Webhook) (string, error) {
+func (o *Controller) secretFn(scm.Webhook) (string, error) {
 	return HMACToken(), nil
+}
+
+func (o *Controller) handlePullRequestCommentEvent(l *logrus.Entry, hook scm.PullRequestCommentHook) {
+	l.Infof("handling comment on PR-%d", hook.PullRequest.Number)
+	l.Infof("new comment '%s'", hook.Comment.Body)
+
+	commentBody := hook.Comment.Body
+	commentLines := strings.Split(commentBody, "\n")
+	for _, line := range commentLines {
+		if strings.HasPrefix(line, "/backport") {
+			l.Infof("we are interested in this line '%s'", line)
+		}
+	}
 }
 
 func responseHTTPError(w http.ResponseWriter, statusCode int, response string) {
