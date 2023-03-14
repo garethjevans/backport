@@ -1,6 +1,10 @@
-package webhook
+package webhook_test
 
 import (
+	"bytes"
+	"github.com/garethjevans/backport/pkg/webhook"
+	http2 "github.com/stretchr/testify/http"
+	"net/http"
 	"os"
 	"testing"
 
@@ -13,10 +17,9 @@ import (
 
 type WebhookTestSuite struct {
 	suite.Suite
-	SCMCLient scm.Client
-	//GitClient      git.Client
-	WebhookOptions *Controller
-	TestRepo       scm.Repository
+	SCMCLient  scm.Client
+	Controller *webhook.Controller
+	TestRepo   scm.Repository
 }
 
 func (suite *WebhookTestSuite) TestProcessWebhookPRComment() {
@@ -25,8 +28,10 @@ func (suite *WebhookTestSuite) TestProcessWebhookPRComment() {
 		Action: scm.ActionUpdate,
 		Repo:   suite.TestRepo,
 	}
+
 	l := logrus.WithField("test", t.Name())
-	logrusEntry, message, err := suite.WebhookOptions.ProcessWebHook(l, webhook)
+	logrusEntry, message, err := suite.Controller.ProcessWebHook(l, webhook)
+
 	assert.NoError(t, err)
 	assert.Equal(t, "processed PR comment hook", message)
 	assert.NotNil(t, logrusEntry)
@@ -39,8 +44,9 @@ func (suite *WebhookTestSuite) TestProcessWebhookPR() {
 		Action: scm.ActionCreate,
 		Repo:   suite.TestRepo,
 	}
+
 	l := logrus.WithField("test", t.Name())
-	logrusEntry, message, err := suite.WebhookOptions.ProcessWebHook(l, webhook)
+	logrusEntry, message, err := suite.Controller.ProcessWebHook(l, webhook)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "processed PR hook", message)
@@ -61,16 +67,32 @@ func (suite *WebhookTestSuite) TestProcessWebhookPRReview() {
 			},
 		},
 	}
+	
 	l := logrus.WithField("test", t.Name())
-	logrusEntry, message, err := suite.WebhookOptions.ProcessWebHook(l, webhook)
+	logrusEntry, message, err := suite.Controller.ProcessWebHook(l, webhook)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "processed PR review hook", message)
 	assert.NotNil(t, logrusEntry)
 }
 
+func (suite *WebhookTestSuite) TestParseWebHook() {
+	t := suite.T()
+
+	pingBytes, err := os.ReadFile("testdata/ping.json")
+	assert.NoError(t, err)
+
+	w := &http2.TestResponseWriter{}
+
+	r, err := http.NewRequest("POST", "/", bytes.NewReader(pingBytes))
+	assert.NoError(t, err)
+
+	suite.Controller.DefaultHandler(w, r)
+
+}
+
 func (suite *WebhookTestSuite) SetupSuite() {
-	suite.WebhookOptions = &Controller{}
+	suite.Controller = &webhook.Controller{}
 	suite.TestRepo = scm.Repository{
 		ID:        "1",
 		Namespace: "default",

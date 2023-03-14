@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/jenkins-x/go-scm/scm"
+	"github.com/jenkins-x/go-scm/scm/driver/github"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -69,8 +70,6 @@ func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	logrus.Debug("about to parse webhook")
-
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		logrus.Errorf("failed to Read Body: %s", err.Error())
@@ -87,7 +86,7 @@ func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.R
 
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-	scmClient := &scm.Client{}
+	scmClient := github.NewDefault()
 
 	webhook, err := parseWebhook(scmClient, r)
 	if err != nil {
@@ -130,7 +129,7 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 	}
 
 	l = l.WithFields(fields)
-	l.WithField("WebHook", webhook).Info("webhook")
+	l.WithField("WebHook", fmt.Sprintf("%+v", webhook)).Info("webhook")
 
 	_, ok := webhook.(*scm.PingHook)
 	if ok {
