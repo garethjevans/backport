@@ -2,11 +2,12 @@ package webhook_test
 
 import (
 	"bytes"
-	"github.com/garethjevans/backport/pkg/webhook"
-	http2 "github.com/stretchr/testify/http"
 	"net/http"
 	"os"
 	"testing"
+
+	"github.com/garethjevans/backport/pkg/webhook"
+	http2 "github.com/stretchr/testify/http"
 
 	"github.com/jenkins-x/go-scm/scm"
 
