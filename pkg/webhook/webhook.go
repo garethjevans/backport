@@ -3,15 +3,16 @@ package webhook
 import (
 	"bytes"
 	"fmt"
-	"github.com/jenkins-x/go-scm/scm"
-	"github.com/jenkins-x/go-scm/scm/driver/github"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/jenkins-x/go-scm/scm"
+	"github.com/jenkins-x/go-scm/scm/driver/github"
+	"github.com/sirupsen/logrus"
 )
 
-// Controller holds the command line arguments
+// Controller holds the command line arguments.
 type Controller struct{}
 
 // Health returns either HTTP 204 if the service is healthy, otherwise nothing ('cos it's dead).
@@ -30,7 +31,7 @@ func (o *Controller) Ready(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// DefaultHandler responds to requests without a specific handler
+// DefaultHandler responds to requests without a specific handler.
 func (o *Controller) DefaultHandler(w http.ResponseWriter, r *http.Request) {
 	o.HandleWebhookRequests(w, r)
 }
@@ -39,14 +40,14 @@ func (o *Controller) isReady() bool {
 	return true
 }
 
-// HandleWebhookRequests handles incoming webhook events
+// HandleWebhookRequests handles incoming webhook events.
 func (o *Controller) HandleWebhookRequests(w http.ResponseWriter, r *http.Request) {
 	o.handleWebhookOrPollRequest(w, r, "Webhook", func(scmClient *scm.Client, r *http.Request) (scm.Webhook, error) {
 		return scmClient.Webhooks.Parse(r, o.secretFn)
 	})
 }
 
-// handleWebhookOrPollRequest handles incoming events
+// handleWebhookOrPollRequest handles incoming events.
 func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.Request, operation string, parseWebhook func(scmClient *scm.Client, r *http.Request) (scm.Webhook, error)) {
 	if r.Method != http.MethodPost {
 		// liveness probe etc
@@ -75,14 +76,12 @@ func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.R
 	webhook, err := parseWebhook(scmClient, r)
 	if err != nil {
 		logrus.Warnf("failed to parse webhook: %s", err.Error())
-
-		responseHTTPError(w, http.StatusInternalServerError, fmt.Sprintf("500 Internal Server Error: Failed to parse webhook: %s", err.Error()))
+		responseHTTPError(w, http.StatusBadRequest, fmt.Sprintf("400 Bad Request: Failed to parse webhook: %s", err.Error()))
 		return
 	}
 	if webhook == nil {
 		logrus.Error("no webhook was parsed")
-
-		responseHTTPError(w, http.StatusInternalServerError, "500 Internal Server Error: No webhook could be parsed")
+		responseHTTPError(w, http.StatusBadRequest, "400 Bad Request: No webhook could be parsed")
 		return
 	}
 
@@ -99,7 +98,7 @@ func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.R
 	}
 }
 
-// ProcessWebHook process a webhook
+// ProcessWebHook process a webhook.
 func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logrus.Entry, string, error) {
 	repository := webhook.Repository()
 	fields := map[string]interface{}{
@@ -118,7 +117,7 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 	_, ok := webhook.(*scm.PingHook)
 	if ok {
 		l.Info("received ping")
-		return l, fmt.Sprintf("pong from backport"), nil
+		return l, "pong from backport", nil
 	}
 
 	pushHook, ok := webhook.(*scm.PushHook)

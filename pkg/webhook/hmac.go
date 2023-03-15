@@ -1,11 +1,12 @@
 package webhook
 
 import (
-	"github.com/sirupsen/logrus"
 	"os"
+
+	"github.com/sirupsen/logrus"
 )
 
-// HMACToken gets the HMAC token from the environment or filesystem
+// HMACToken gets the HMAC token from the environment or filesystem.
 func HMACToken() string {
 	hmacToken := os.Getenv("HMAC_TOKEN")
 	// For backwards compatibility we only attempt to read from the filesystem

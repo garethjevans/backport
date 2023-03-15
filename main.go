@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/garethjevans/backport/pkg/webhook"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"os"
 )
 
 const defaultPort = "3000"
@@ -19,7 +21,10 @@ func main() {
 	controller := webhook.Controller{}
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("backport is alive"))
+		_, err := w.Write([]byte("backport is alive"))
+		if err != nil {
+			logrus.Fatalf("unable to write to buffer %v", err)
+		}
 	})
 
 	r.Get("/health", controller.Health)
@@ -27,7 +32,19 @@ func main() {
 
 	r.Post("/", controller.DefaultHandler)
 
-	http.ListenAndServe(fmt.Sprintf(":%s", port()), r)
+	srv := &http.Server{
+		ReadTimeout:       1 * time.Second,
+		WriteTimeout:      1 * time.Second,
+		IdleTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 2 * time.Second,
+		Handler:           r,
+		Addr:              fmt.Sprintf(":%s", port()),
+	}
+
+	err := srv.ListenAndServe()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func port() string {
