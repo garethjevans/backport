@@ -212,7 +212,7 @@ func (o *Controller) handlePullRequestCommentEvent(l *logrus.Entry, hook scm.Pul
 	l.Infof("new comment '%s'", hook.Comment.Body)
 
 	body := hook.Comment.Body
-	o.handleComment(l, body)
+	o.handleComment(l, body, hook.PullRequest.Number)
 }
 
 func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueCommentHook) {
@@ -220,10 +220,10 @@ func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueComm
 	l.Infof("new comment '%s'", hook.Comment.Body)
 
 	body := hook.Comment.Body
-	o.handleComment(l, body)
+	o.handleComment(l, body, hook.Issue.Number)
 }
 
-func (o *Controller) handleComment(l *logrus.Entry, body string) {
+func (o *Controller) handleComment(l *logrus.Entry, body string, pr int) {
 	commentLines := strings.Split(body, "\n")
 	for _, line := range commentLines {
 		if strings.HasPrefix(line, "/backport") {
@@ -232,9 +232,14 @@ func (o *Controller) handleComment(l *logrus.Entry, body string) {
 	}
 
 	// FIXME this should not be here
-	s := service.NewService()
-	u, _, err := s.GetCredentials("https://github.com")
+	k := service.NewKubernetesService()
+	u, t, err := k.GetCredentials("https://github.com")
 	l.Infof("username=%s, password=XXX, err=%v", u, err)
+
+	s := service.NewScmService("https://github.com", t)
+	commits, err := s.ListCommitsForPr("garethjevans", "backport", pr)
+	l.Infof("commits=%s, err=%v", commits, err)
+
 }
 
 func (o *Controller) handlePullRequestEvent(l *logrus.Entry, hook *scm.PullRequestHook) {
