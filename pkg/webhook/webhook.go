@@ -123,7 +123,6 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 	case scm.WebhookKindInstallation:
 	case scm.WebhookKindInstallationRepository:
 	case scm.WebhookKindIssue:
-	case scm.WebhookKindIssueComment:
 	case scm.WebhookKindLabel:
 	case scm.WebhookKindPing:
 	case scm.WebhookKindPush:
@@ -176,28 +175,29 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 			o.handlePullRequestCommentEvent(l, *prCommentHook)
 			return l, "processed PR comment hook", nil
 		}
-	}
 
-	//issueCommentHook, ok := webhook.(*scm.IssueCommentHook)
-	//if ok {
-	//	action := issueCommentHook.Action
-	//	issue := issueCommentHook.Issue
-	//	comment := issueCommentHook.Comment
-	//	sender := issueCommentHook.Sender
-	//	fields["Action"] = action.String()
-	//	fields["Issue.Number"] = issue.Number
-	//	fields["Issue.Title"] = issue.Title
-	//	fields["Issue.Body"] = issue.Body
-	//	fields["Comment.Body"] = comment.Body
-	//	fields["Sender.Body"] = sender.Name
-	//	fields["Sender.Login"] = sender.Login
-	//	fields["Kind"] = "IssueCommentHook"
-	//
-	//	l.Info("invoking Issue Comment handler")
-	//
-	//	o.handleIssueCommentEvent(l, *issueCommentHook)
-	//	return l, "processed issue comment hook", nil
-	//}
+	case scm.WebhookKindIssueComment:
+		issueCommentHook, ok := webhook.(*scm.IssueCommentHook)
+		if ok {
+			action := issueCommentHook.Action
+			issue := issueCommentHook.Issue
+			comment := issueCommentHook.Comment
+			sender := issueCommentHook.Sender
+			fields["Action"] = action.String()
+			fields["Issue.Number"] = issue.Number
+			fields["Issue.Title"] = issue.Title
+			fields["Issue.Body"] = issue.Body
+			fields["Comment.Body"] = comment.Body
+			fields["Sender.Body"] = sender.Name
+			fields["Sender.Login"] = sender.Login
+			fields["Kind"] = "IssueCommentHook"
+
+			l.Info("invoking Issue Comment handler")
+
+			o.handleIssueCommentEvent(l, *issueCommentHook)
+			return l, "processed issue comment hook", nil
+		}
+	}
 
 	l.Debugf("unknown kind %s webhook %#v", webhook.Kind(), webhook)
 	return l, fmt.Sprintf("unknown hook %s", webhook.Kind()), nil
