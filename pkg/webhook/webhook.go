@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/garethjevans/backport/pkg/service"
+
 	"github.com/jenkins-x/go-scm/scm"
 	"github.com/jenkins-x/go-scm/scm/driver/github"
 	"github.com/sirupsen/logrus"
@@ -259,6 +261,11 @@ func (o *Controller) handleComment(l *logrus.Entry, body string) {
 			l.Infof("we are interested in this line '%s'", line)
 		}
 	}
+
+	// FIXME this should not be here
+	s := service.NewService()
+	u, _, err := s.GetCredentials("https://github.com")
+	l.Infof("username=%s, password=XXX, err=%v", u, err)
 }
 
 func (o *Controller) handlePullRequestEvent(l *logrus.Entry, hook *scm.PullRequestHook) {
