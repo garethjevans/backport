@@ -107,128 +107,98 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 	repository := webhook.Repository()
 	fields := map[string]interface{}{
 		"Repo": fmt.Sprintf("%s/%s", repository.Namespace, repository.Name),
-		//"Branch":    repository.Branch,
 		"Link": repository.Link,
-		//"ID":    repository.ID,
-		//"Clone": repository.Clone,
 		"Kind": webhook.Kind(),
 	}
 
 	l = l.WithFields(fields)
-	//l.WithField("WebHook", fmt.Sprintf("%+v", webhook)).Info("webhook")
 
-	_, ok := webhook.(*scm.PingHook)
-	if ok {
-		l.Info("received ping")
-		return l, "pong from backport", nil
+	switch webhook.Kind() {
+	case scm.WebhookKindBranch:
+	case scm.WebhookKindCheckRun:
+	case scm.WebhookKindCheckSuite:
+	case scm.WebhookKindDeploy:
+	case scm.WebhookKindDeploymentStatus:
+	case scm.WebhookKindFork:
+	case scm.WebhookKindInstallation:
+	case scm.WebhookKindInstallationRepository:
+	case scm.WebhookKindIssue:
+	case scm.WebhookKindIssueComment:
+	case scm.WebhookKindLabel:
+	case scm.WebhookKindPing:
+	case scm.WebhookKindPush:
+	case scm.WebhookKindRelease:
+	case scm.WebhookKindRepository:
+	case scm.WebhookKindReview:
+	case scm.WebhookKindReviewCommentHook:
+	case scm.WebhookKindStar:
+	case scm.WebhookKindStatus:
+	case scm.WebhookKindTag:
+	case scm.WebhookKindWatch:
+		return l, "ignored webhook events", nil
+	case scm.WebhookKindPullRequest:
+		prHook, ok := webhook.(*scm.PullRequestHook)
+		if ok {
+			action := prHook.Action
+			fields["Action"] = action.String()
+			pr := prHook.PullRequest
+			fields["PR.Number"] = pr.Number
+			fields["PR.Ref"] = pr.Ref
+			fields["PR.Sha"] = pr.Sha
+			fields["PR.Title"] = pr.Title
+			fields["PR.Body"] = pr.Body
+
+			l.Info("invoking PR handler")
+
+			o.handlePullRequestEvent(l, prHook)
+			return l, "processed PR hook", nil
+		}
+	case scm.WebhookKindPullRequestComment:
+		prCommentHook, ok := webhook.(*scm.PullRequestCommentHook)
+		if ok {
+			action := prCommentHook.Action
+			fields["Action"] = action.String()
+			pr := prCommentHook.PullRequest
+			fields["PR.Number"] = pr.Number
+			fields["PR.Ref"] = pr.Ref
+			fields["PR.Sha"] = pr.Sha
+			fields["PR.Title"] = pr.Title
+			fields["PR.Body"] = pr.Body
+			comment := prCommentHook.Comment
+			fields["Comment.Body"] = comment.Body
+			author := comment.Author
+			fields["Author.Name"] = author.Name
+			fields["Author.Login"] = author.Login
+			fields["Author.Avatar"] = author.Avatar
+
+			l.Info("invoking PR Comment handler")
+
+			o.handlePullRequestCommentEvent(l, *prCommentHook)
+			return l, "processed PR comment hook", nil
+		}
 	}
 
-	pushHook, ok := webhook.(*scm.PushHook)
-	if ok {
-		fields["Ref"] = pushHook.Ref
-		fields["BaseRef"] = pushHook.BaseRef
-		fields["Commit.Sha"] = pushHook.Commit.Sha
-		fields["Commit.Link"] = pushHook.Commit.Link
-		fields["Commit.Author"] = pushHook.Commit.Author
-		fields["Commit.Message"] = pushHook.Commit.Message
-		fields["Commit.Committer.Name"] = pushHook.Commit.Committer.Name
+	//issueCommentHook, ok := webhook.(*scm.IssueCommentHook)
+	//if ok {
+	//	action := issueCommentHook.Action
+	//	issue := issueCommentHook.Issue
+	//	comment := issueCommentHook.Comment
+	//	sender := issueCommentHook.Sender
+	//	fields["Action"] = action.String()
+	//	fields["Issue.Number"] = issue.Number
+	//	fields["Issue.Title"] = issue.Title
+	//	fields["Issue.Body"] = issue.Body
+	//	fields["Comment.Body"] = comment.Body
+	//	fields["Sender.Body"] = sender.Name
+	//	fields["Sender.Login"] = sender.Login
+	//	fields["Kind"] = "IssueCommentHook"
+	//
+	//	l.Info("invoking Issue Comment handler")
+	//
+	//	o.handleIssueCommentEvent(l, *issueCommentHook)
+	//	return l, "processed issue comment hook", nil
+	//}
 
-		l.Info("invoking Push handler")
-
-		//o.handlePushEvent(l, pushHook)
-		return l, "processed push hook", nil
-	}
-	prHook, ok := webhook.(*scm.PullRequestHook)
-	if ok {
-		action := prHook.Action
-		fields["Action"] = action.String()
-		pr := prHook.PullRequest
-		fields["PR.Number"] = pr.Number
-		fields["PR.Ref"] = pr.Ref
-		fields["PR.Sha"] = pr.Sha
-		fields["PR.Title"] = pr.Title
-		fields["PR.Body"] = pr.Body
-
-		l.Info("invoking PR handler")
-
-		o.handlePullRequestEvent(l, prHook)
-		return l, "processed PR hook", nil
-	}
-	branchHook, ok := webhook.(*scm.BranchHook)
-	if ok {
-		action := branchHook.Action
-		ref := branchHook.Ref
-		sender := branchHook.Sender
-		fields["Action"] = action.String()
-		fields["Ref.Sha"] = ref.Sha
-		fields["Sender.Name"] = sender.Name
-
-		l.Info("invoking branch handler")
-
-		//o.handleBranchEvent(l, branchHook)
-		return l, "processed branch hook", nil
-	}
-	issueCommentHook, ok := webhook.(*scm.IssueCommentHook)
-	if ok {
-		action := issueCommentHook.Action
-		issue := issueCommentHook.Issue
-		comment := issueCommentHook.Comment
-		sender := issueCommentHook.Sender
-		fields["Action"] = action.String()
-		fields["Issue.Number"] = issue.Number
-		fields["Issue.Title"] = issue.Title
-		fields["Issue.Body"] = issue.Body
-		fields["Comment.Body"] = comment.Body
-		fields["Sender.Body"] = sender.Name
-		fields["Sender.Login"] = sender.Login
-		fields["Kind"] = "IssueCommentHook"
-
-		l.Info("invoking Issue Comment handler")
-
-		o.handleIssueCommentEvent(l, *issueCommentHook)
-		return l, "processed issue comment hook", nil
-	}
-	prCommentHook, ok := webhook.(*scm.PullRequestCommentHook)
-	if ok {
-		action := prCommentHook.Action
-		fields["Action"] = action.String()
-		pr := prCommentHook.PullRequest
-		fields["PR.Number"] = pr.Number
-		fields["PR.Ref"] = pr.Ref
-		fields["PR.Sha"] = pr.Sha
-		fields["PR.Title"] = pr.Title
-		fields["PR.Body"] = pr.Body
-		comment := prCommentHook.Comment
-		fields["Comment.Body"] = comment.Body
-		author := comment.Author
-		fields["Author.Name"] = author.Name
-		fields["Author.Login"] = author.Login
-		fields["Author.Avatar"] = author.Avatar
-
-		l.Info("invoking PR Comment handler")
-
-		o.handlePullRequestCommentEvent(l, *prCommentHook)
-		return l, "processed PR comment hook", nil
-	}
-	prReviewHook, ok := webhook.(*scm.ReviewHook)
-	if ok {
-		action := prReviewHook.Action
-		fields["Action"] = action.String()
-		pr := prReviewHook.PullRequest
-		fields["PR.Number"] = pr.Number
-		fields["PR.Ref"] = pr.Ref
-		fields["PR.Sha"] = pr.Sha
-		fields["PR.Title"] = pr.Title
-		fields["PR.Body"] = pr.Body
-		fields["Review.State"] = prReviewHook.Review.State
-		fields["Reviewer.Name"] = prReviewHook.Review.Author.Name
-		fields["Reviewer.Login"] = prReviewHook.Review.Author.Login
-		fields["Reviewer.Avatar"] = prReviewHook.Review.Author.Avatar
-
-		l.Info("invoking PR Review handler")
-
-		return l, "processed PR review hook", nil
-	}
 	l.Debugf("unknown kind %s webhook %#v", webhook.Kind(), webhook)
 	return l, fmt.Sprintf("unknown hook %s", webhook.Kind()), nil
 }
