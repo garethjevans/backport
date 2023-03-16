@@ -71,7 +71,7 @@ func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	logrus.Infof("raw event %s", string(bodyBytes))
+	logrus.Debugf("raw event %s", string(bodyBytes))
 
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
@@ -106,17 +106,16 @@ func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.R
 func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logrus.Entry, string, error) {
 	repository := webhook.Repository()
 	fields := map[string]interface{}{
-		"Namespace": repository.Namespace,
-		"Name":      repository.Name,
-		"Branch":    repository.Branch,
-		"Link":      repository.Link,
-		"ID":        repository.ID,
-		"Clone":     repository.Clone,
-		"Webhook":   webhook.Kind(),
+		"Repo": fmt.Sprintf("%s/%s", repository.Namespace, repository.Name),
+		//"Branch":    repository.Branch,
+		"Link": repository.Link,
+		//"ID":    repository.ID,
+		//"Clone": repository.Clone,
+		"Kind": webhook.Kind(),
 	}
 
 	l = l.WithFields(fields)
-	l.WithField("WebHook", fmt.Sprintf("%+v", webhook)).Info("webhook")
+	//l.WithField("WebHook", fmt.Sprintf("%+v", webhook)).Info("webhook")
 
 	_, ok := webhook.(*scm.PingHook)
 	if ok {
