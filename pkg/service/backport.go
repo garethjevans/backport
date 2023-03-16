@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/jenkins-x/go-scm/scm"
@@ -30,6 +31,16 @@ func (s *serviceImpl) GetCredentials(host string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+
+	const (
+		namespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	)
+
+	namespace, err := os.ReadFile(namespaceFile)
+	if err != nil {
+		return "", "", err
+	}
+
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -37,7 +48,7 @@ func (s *serviceImpl) GetCredentials(host string) (string, string, error) {
 	}
 
 	// use the pods service account to list all secrets
-	secrets, err := clientset.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
+	secrets, err := clientset.CoreV1().Secrets(string(namespace)).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return "", "", err
 	}
@@ -45,16 +56,14 @@ func (s *serviceImpl) GetCredentials(host string) (string, string, error) {
 	logrus.Infof("There are %d secrets to check", len(secrets.Items))
 
 	for _, secret := range secrets.Items {
+		// and type: kubernetes.io/basic-auth
 		if secret.Type == "kubernetes.io/basic-auth" {
 			for k, v := range secret.Annotations {
+				// locate secret with the annotation tekton.dev/git-0: https://github.com
 				if strings.HasPrefix(k, "tekton.dev/git-") && v == host {
+					// when we find one, we should return data.username and data.password
 					return string(secret.Data["username"]), string(secret.Data["password"]), nil
 				}
-
-				// locate secret with the annotation tekton.dev/git-0: https://github.com
-				// and type:
-
-				// when we find one, we should return data.username and data.password
 			}
 		}
 	}
