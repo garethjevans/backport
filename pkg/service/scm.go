@@ -6,6 +6,7 @@ import (
 	"github.com/jenkins-x/go-scm/scm"
 	"github.com/jenkins-x/go-scm/scm/factory"
 	"github.com/sirupsen/logrus"
+	"strings"
 )
 
 type Scm interface {
@@ -46,11 +47,20 @@ func (s *scmImpl) ListCommitsForPr(owner string, repo string, pr int) ([]string,
 
 func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]string, error) {
 	// convert these into commits
-	_, _, err := s.client.PullRequests.ListCommits(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, &scm.ListOptions{})
+	pullRequest, _, err := s.client.PullRequests.Find(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr)
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+
+	var branches []string
+	for _, label := range pullRequest.Labels {
+		const labelPrefix = "Backport to "
+		if strings.HasPrefix(label.Name, labelPrefix) {
+			branches = append(branches, strings.TrimPrefix(label.Name, labelPrefix))
+		}
+	}
+
+	return branches, nil
 }
 
 func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, branch string) error {

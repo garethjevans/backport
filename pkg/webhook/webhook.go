@@ -240,6 +240,13 @@ func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueComm
 
 	body := hook.Comment.Body
 	o.handleComment(l, body, hook.Issue.Number)
+
+	parts := strings.Split(hook.Repo.FullName, "/")
+
+	err := o.applyBackports(l, "https://github.com", parts[0], parts[1], hook.Issue.Number)
+	if err != nil {
+		logrus.Errorf("Unable to apply backports %v", err)
+	}
 }
 
 func (o *Controller) handleComment(l *logrus.Entry, body string, pr int) {
@@ -249,27 +256,43 @@ func (o *Controller) handleComment(l *logrus.Entry, body string, pr int) {
 			l.Infof("we are interested in this line '%s'", line)
 		}
 	}
+}
 
-	// FIXME this should not be here
+func (o *Controller) applyBackports(l *logrus.Entry, host string, owner string, repo string, pr int) error {
 	k := service.NewKubernetes()
-	u, t, err := k.GetCredentials("https://github.com")
-	l.Infof("username=%s, password=XXX, err=%v", u, err)
+	u, t, err := k.GetCredentials(host)
+	if err != nil {
+		return err
+	}
 
-	s := service.NewScm("https://github.com", t)
-	commits, err := s.ListCommitsForPr("garethjevans", "backport", pr)
-	l.Infof("commits=%s, err=%v", commits, err)
+	l.Debugf("username=%s, password=XXX", u)
 
+	s := service.NewScm(host, t)
+	commits, err := s.ListCommitsForPr(owner, repo, pr)
+	if err != nil {
+		return err
+	}
+
+	l.Infof("commits=%s", commits)
+
+	branches, err := s.DetermineBranchesForPr(owner, repo, pr)
+	if err != nil {
+		return err
+	}
+
+	l.Infof("branches=%s", branches)
+
+	return nil
 }
 
 func (o *Controller) handlePullRequestEvent(l *logrus.Entry, hook *scm.PullRequestHook) {
-	// msg=webhook
-	// Branch=main
-	// Clone="https://github.com/garethjevans/backport.git"
-	// ID=613319709
-	// Link="https://github.com/garethjevans/backport"
-	// Name=backport
-	// Namespace=garethjevans
-	// WebHook="&{Action:closed Repo:{ID:613319709 Namespace:garethjevans Name:backport FullName:garethjevans/backport Perm:<nil> Branch:main Private:false Archived:false Clone:https://github.com/garethjevans/backport.git CloneSSH:git@github.com:garethjevans/backport.git Link:https://github.com/garethjevans/backport Created:0001-01-01 00:00:00 +0000 UTC Updated:0001-01-01 00:00:00 +0000 UTC} Label:{ID:0 URL: Name: Description: Color:} PullRequest:{Number:1 Title:Update README.md Body: Labels:[] Sha:32a5035217faf1ca942b1068b6cbdcf8de2010b0 Ref:refs/pull/1/head Source:garethjevans-patch-1 Target:main Base:{Ref:main Sha:7a3d50f1224b213351cd261c0367206e72ebb0e6 Repo:{ID:613319709 Namespace:garethjevans Name:backport FullName:garethjevans/backport Perm:0xc0002cf099 Branch:main Private:false Archived:false Clone:https://github.com/garethjevans/backport.git CloneSSH:git@github.com:garethjevans/backport.git Link:https://github.com/garethjevans/backport Created:2023-03-13 10:45:28 +0000 UTC Updated:2023-03-13 10:48:57 +0000 UTC}} Head:{Ref:garethjevans-patch-1 Sha:32a5035217faf1ca942b1068b6cbdcf8de2010b0 Repo:{ID:613319709 Namespace:garethjevans Name:backport FullName:garethjevans/backport Perm:0xc0002cf0c9 Branch:main Private:false Archived:false Clone:https://github.com/garethjevans/backport.git CloneSSH:git@github.com:garethjevans/backport.git Link:https://github.com/garethjevans/backport Created:2023-03-13 10:45:28 +0000 UTC Updated:2023-03-13 10:48:57 +0000 UTC}} Fork:garethjevans/backport State:closed Closed:true Draft:false Merged:true Mergeable:false Rebaseable:false MergeableState: MergeSha:e2268af2b3ef876f856a2baf5b47ac32f8d3a5de Author:{ID:158150 Login:garethjevans Name: Email: Avatar:https://avatars.githubusercontent.com/u/158150?v=4 Link:https://github.com/garethjevans IsAdmin:false Created:0001-01-01 00:00:00 +0000 UTC Updated:0001-01-01 00:00:00 +0000 UTC} Assignees:[] Reviewers:[] Milestone:{Number:0 ID:0 Title: Description: Link: State: DueDate:<nil>} Created:2023-03-14 16:51:47 +0000 UTC Updated:2023-03-15 16:39:26 +0000 UTC Link:https://github.com/garethjevans/backport/pull/1 DiffLink:https://github.com/garethjevans/backport/pull/1.diff} Sender:{ID:158150 Login:garethjevans Name: Email: Avatar:https://avatars.githubusercontent.com/u/158150?v=4 Link:https://github.com/garethjevans IsAdmin:false Created:0001-01-01 00:00:00 +0000 UTC Updated:0001-01-01 00:00:00 +0000 UTC} Changes:{Base:{Ref:{From:} Sha:{From:} Repo:{ID: Namespace: Name: FullName: Perm:<nil> Branch: Private:false Archived:false Clone: CloneSSH: Link: Created:0001-01-01 00:00:00 +0000 UTC Updated:0001-01-01 00:00:00 +0000 UTC}}} GUID:f34dac60-c34f-11ed-8673-b8ca42b8009f Installation:<nil>}" Webhook=pull_request
+	l.Infof("handling comment on Issue %d", hook.PullRequest.Number)
+	parts := strings.Split(hook.Repo.FullName, "/")
+
+	err := o.applyBackports(l, "https://github.com", parts[0], parts[1], hook.PullRequest.Number)
+	if err != nil {
+		logrus.Errorf("Unable to apply backports %v", err)
+	}
 }
 
 func responseHTTPError(w http.ResponseWriter, statusCode int, response string) {
