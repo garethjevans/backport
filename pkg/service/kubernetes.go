@@ -11,18 +11,18 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-type KubernetesService interface {
+type Kubernetes interface {
 	GetCredentials(host string) (string, string, error)
 }
 
-type kubernetesServiceImpl struct {
+type kubernetesImpl struct {
 }
 
-func NewKubernetesService() KubernetesService {
-	return &kubernetesServiceImpl{}
+func NewKubernetes() Kubernetes {
+	return &kubernetesImpl{}
 }
 
-func (s *kubernetesServiceImpl) GetCredentials(host string) (string, string, error) {
+func (s *kubernetesImpl) GetCredentials(host string) (string, string, error) {
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {

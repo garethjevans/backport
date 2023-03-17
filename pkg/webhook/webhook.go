@@ -232,11 +232,11 @@ func (o *Controller) handleComment(l *logrus.Entry, body string, pr int) {
 	}
 
 	// FIXME this should not be here
-	k := service.NewKubernetesService()
+	k := service.NewKubernetes()
 	u, t, err := k.GetCredentials("https://github.com")
 	l.Infof("username=%s, password=XXX, err=%v", u, err)
 
-	s := service.NewScmService("https://github.com", t)
+	s := service.NewScm("https://github.com", t)
 	commits, err := s.ListCommitsForPr("garethjevans", "backport", pr)
 	l.Infof("commits=%s, err=%v", commits, err)
 

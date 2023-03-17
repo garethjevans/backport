@@ -58,3 +58,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace github.com/jenkins-x/go-scm v1.13.9 => github.com/garethjevans/go-scm v0.0.0-20230317104311-4e01289e2ae0
