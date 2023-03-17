@@ -115,26 +115,45 @@ func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logr
 
 	switch webhook.Kind() {
 	case scm.WebhookKindBranch:
+		fallthrough
 	case scm.WebhookKindCheckRun:
+		fallthrough
 	case scm.WebhookKindCheckSuite:
+		fallthrough
 	case scm.WebhookKindDeploy:
+		fallthrough
 	case scm.WebhookKindDeploymentStatus:
+		fallthrough
 	case scm.WebhookKindFork:
+		fallthrough
 	case scm.WebhookKindInstallation:
+		fallthrough
 	case scm.WebhookKindInstallationRepository:
+		fallthrough
 	case scm.WebhookKindIssue:
+		fallthrough
 	case scm.WebhookKindLabel:
+		fallthrough
 	case scm.WebhookKindPing:
+		fallthrough
 	case scm.WebhookKindPush:
+		fallthrough
 	case scm.WebhookKindRelease:
+		fallthrough
 	case scm.WebhookKindRepository:
+		fallthrough
 	case scm.WebhookKindReview:
+		fallthrough
 	case scm.WebhookKindReviewCommentHook:
+		fallthrough
 	case scm.WebhookKindStar:
+		fallthrough
 	case scm.WebhookKindStatus:
+		fallthrough
 	case scm.WebhookKindTag:
+		fallthrough
 	case scm.WebhookKindWatch:
-		return l, "ignored webhook events", nil
+		return l, fmt.Sprintf("ignored webhook %s", webhook.Kind()), nil
 	case scm.WebhookKindPullRequest:
 		prHook, ok := webhook.(*scm.PullRequestHook)
 		if ok {
