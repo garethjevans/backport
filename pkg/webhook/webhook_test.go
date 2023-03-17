@@ -73,7 +73,7 @@ func (suite *WebhookTestSuite) TestProcessWebhookPRReview() {
 	entry, message, err := suite.Controller.ProcessWebHook(l, w)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "unknown hook review", message)
+	assert.Equal(t, "ignored webhook review", message)
 	assert.NotNil(t, entry)
 }
 
