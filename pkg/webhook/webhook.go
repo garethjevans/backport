@@ -256,8 +256,9 @@ func (o *Controller) handleComment(l *logrus.Entry, host string, owner string, r
 	commentLines := strings.Split(body, "\n")
 	for _, line := range commentLines {
 		if strings.HasPrefix(line, "/backport") {
-			l.Infof("we are interested in this line '%s' on PR-%d", line, pr)
-			err := o.notifyPr(l, host, owner, repo, pr, strings.TrimPrefix(line, "/backport "))
+			branch := strings.TrimPrefix(line, "/backport ")
+			l.Infof("we are interested in this line '%s' on PR-%d - backporting to branch %s", line, pr, branch)
+			err := o.notifyPr(l, host, owner, repo, pr, branch)
 			if err != nil {
 				return err
 			}
