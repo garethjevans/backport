@@ -3,12 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/jenkins-x/go-scm/scm"
-	"github.com/jenkins-x/go-scm/scm/factory"
-	"github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/jenkins-x/go-scm/scm"
+	"github.com/jenkins-x/go-scm/scm/factory"
+	"github.com/sirupsen/logrus"
 )
 
 type Scm interface {
@@ -75,50 +76,50 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	}
 	defer os.Remove(file.Name())
 
-	gitUrl := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
-	o, err := execute("git", "clone", gitUrl)
+	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
+	o, err := executeGit("clone", gitURL)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("got %s", o)
+	logrus.Infof("clone> %s", o)
 
-	o, err = execute("git", "checkout", "", branch)
+	o, err = executeGit("checkout", "", branch)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("got %s", o)
+	logrus.Infof("checkout> %s", o)
 
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
-	o, err = execute("git", "checkout", "-b", backportBranchName)
+	o, err = executeGit("checkout", "-b", backportBranchName)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("got %s", o)
+	logrus.Infof("checkout -b> %s", o)
 
 	// apply commits in order
 	for _, commit := range commits {
 		logrus.Infof("cherry-picking %s", commit)
-		o, err = execute("git", "cherry-pick", commit)
+		o, err = executeGit("cherry-pick", commit)
 		if err != nil {
 			return err
 		}
-		logrus.Infof("got %s", o)
+		logrus.Infof("cherry-pick> %s", o)
 	}
 
 	logrus.Infof("pushing %s", backportBranchName)
-	o, err = execute("git", "push", "origin", backportBranchName)
+	o, err = executeGit("push", "origin", backportBranchName)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("got %s", o)
+	logrus.Infof("push> %s", o)
 
-	// FIXME if this fails at any point, create an issue on the repo with labels and the error message
+	// if this fails at any point, create an issue on the repo with labels and the error message
 
 	return nil
 }
 
-func execute(command string, args ...string) (string, error) {
-	cmd := exec.Command(command, args...)
+func executeGit(args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
 	stdout, err := cmd.Output()
 
 	if err != nil {

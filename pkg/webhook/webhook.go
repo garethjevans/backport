@@ -253,7 +253,7 @@ func (o *Controller) handleComment(l *logrus.Entry, body string, pr int) {
 	commentLines := strings.Split(body, "\n")
 	for _, line := range commentLines {
 		if strings.HasPrefix(line, "/backport") {
-			l.Infof("we are interested in this line '%s'", line)
+			l.Infof("we are interested in this line '%s' on PR-%d", line, pr)
 		}
 	}
 }
