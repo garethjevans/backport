@@ -55,6 +55,7 @@ func (s *scmImpl) ListCommitsForPr(owner string, repo string, pr int) ([]string,
 }
 
 func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]string, error) {
+	logrus.Infof("Determining branches for %s/%s/pulls/%d", owner, repo, pr)
 	// convert these into commits
 	pullRequest, _, err := s.client.PullRequests.Find(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr)
 	if err != nil {
@@ -72,6 +73,7 @@ func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]s
 }
 
 func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch string, commits []string) error {
+	logrus.Infof("Applying commits to repo for %s/%s/pulls/%d", owner, repo, pr)
 	// clone repository to a temporary directory
 	file, err := os.CreateTemp("", "git-worker")
 	if err != nil {
@@ -124,8 +126,10 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 }
 
 func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch string) error {
+	labelName := fmt.Sprintf("%s%s", labelPrefix, branch)
+	logrus.Infof("Applying label %s to repo for %s/%s/pulls/%d", labelName, owner, repo, pr)
 	// convert these into commits
-	_, err := s.client.PullRequests.AddLabel(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, fmt.Sprintf("%s%s", labelPrefix, branch))
+	_, err := s.client.PullRequests.AddLabel(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, labelName)
 	if err != nil {
 		return err
 	}
