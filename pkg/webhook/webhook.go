@@ -291,6 +291,13 @@ func (o *Controller) applyBackports(l *logrus.Entry, host string, owner string, 
 
 	l.Infof("branches=%s", branches)
 
+	for _, branch := range branches {
+		err = s.ApplyCommitsToRepo(owner, repo, pr, branch, commits)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
