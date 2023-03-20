@@ -1,5 +1,6 @@
 ARG BUILDER_IMAGE=golang:1.19
-ARG RUNTIME_IMAGE=cgr.dev/chainguard/git
+#ARG RUNTIME_IMAGE=cgr.dev/chainguard/git
+ARG RUNTIME_IMAGE=alpine/git:2.36.3
 
 FROM $BUILDER_IMAGE AS build
 
