@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/jenkins-x/go-scm/scm"
@@ -77,20 +78,22 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	defer os.Remove(file.Name())
 
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
-	o, err := executeGit("clone", gitURL)
+	o, err := executeGit(file.Name(), "clone", gitURL)
 	if err != nil {
 		return err
 	}
 	logrus.Infof("clone> %s", o)
 
-	o, err = executeGit("checkout", "", branch)
+	path := filepath.Join(file.Name(), repo)
+
+	o, err = executeGit(path, "checkout", "", branch)
 	if err != nil {
 		return err
 	}
 	logrus.Infof("checkout> %s", o)
 
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
-	o, err = executeGit("checkout", "-b", backportBranchName)
+	o, err = executeGit(path, "checkout", "-b", backportBranchName)
 	if err != nil {
 		return err
 	}
@@ -99,7 +102,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	// apply commits in order
 	for _, commit := range commits {
 		logrus.Infof("cherry-picking %s", commit)
-		o, err = executeGit("cherry-pick", commit)
+		o, err = executeGit(path, "cherry-pick", commit)
 		if err != nil {
 			return err
 		}
@@ -107,7 +110,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	}
 
 	logrus.Infof("pushing %s", backportBranchName)
-	o, err = executeGit("push", "origin", backportBranchName)
+	o, err = executeGit(path, "push", "origin", backportBranchName)
 	if err != nil {
 		return err
 	}
@@ -118,8 +121,9 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	return nil
 }
 
-func executeGit(args ...string) (string, error) {
+func executeGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
 	stdout, err := cmd.Output()
 
 	if err != nil {
