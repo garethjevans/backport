@@ -231,7 +231,12 @@ func (o *Controller) handlePullRequestCommentEvent(l *logrus.Entry, hook scm.Pul
 	l.Infof("new comment '%s'", hook.Comment.Body)
 
 	body := hook.Comment.Body
-	o.handleComment(l, body, hook.PullRequest.Number)
+
+	parts := strings.Split(hook.Repo.FullName, "/")
+	err := o.handleComment(l, "https://github.com", parts[0], parts[1], body, hook.PullRequest.Number)
+	if err != nil {
+		logrus.Errorf("Unable to apply backports %v", err)
+	}
 }
 
 func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueCommentHook) {
@@ -239,23 +244,26 @@ func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueComm
 	l.Infof("new comment '%s'", hook.Comment.Body)
 
 	body := hook.Comment.Body
-	o.handleComment(l, body, hook.Issue.Number)
 
 	parts := strings.Split(hook.Repo.FullName, "/")
-
-	err := o.applyBackports(l, "https://github.com", parts[0], parts[1], hook.Issue.Number)
+	err := o.handleComment(l, "https://github.com", parts[0], parts[1], body, hook.Issue.Number)
 	if err != nil {
 		logrus.Errorf("Unable to apply backports %v", err)
 	}
 }
 
-func (o *Controller) handleComment(l *logrus.Entry, body string, pr int) {
+func (o *Controller) handleComment(l *logrus.Entry, host string, owner string, repo string, body string, pr int) error {
 	commentLines := strings.Split(body, "\n")
 	for _, line := range commentLines {
 		if strings.HasPrefix(line, "/backport") {
 			l.Infof("we are interested in this line '%s' on PR-%d", line, pr)
+			err := o.notifyPr(l, host, owner, repo, pr, strings.TrimPrefix(line, "/backport "))
+			if err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (o *Controller) applyBackports(l *logrus.Entry, host string, owner string, repo string, pr int) error {
@@ -293,6 +301,24 @@ func (o *Controller) handlePullRequestEvent(l *logrus.Entry, hook *scm.PullReque
 	if err != nil {
 		logrus.Errorf("Unable to apply backports %v", err)
 	}
+}
+
+func (o *Controller) notifyPr(l *logrus.Entry, host string, owner string, repo string, pr int, branch string) error {
+	k := service.NewKubernetes()
+	u, t, err := k.GetCredentials(host)
+	if err != nil {
+		return err
+	}
+
+	l.Debugf("username=%s, password=XXX", u)
+
+	s := service.NewScm(host, t)
+	err = s.AddBranchLabelToPr(owner, repo, pr, branch)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func responseHTTPError(w http.ResponseWriter, statusCode int, response string) {

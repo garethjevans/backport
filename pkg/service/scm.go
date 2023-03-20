@@ -13,10 +13,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const labelPrefix = "Backport to "
+
 type Scm interface {
 	ListCommitsForPr(owner string, repo string, pr int) ([]string, error)
 	DetermineBranchesForPr(owner string, repo string, pr int) ([]string, error)
 	ApplyCommitsToRepo(owner string, repo string, pr int, branch string, commits []string) error
+	AddBranchLabelToPr(owner string, repo string, pr int, branch string) error
 }
 
 type scmImpl struct {
@@ -60,7 +63,6 @@ func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]s
 
 	var branches []string
 	for _, label := range pullRequest.Labels {
-		const labelPrefix = "Backport to "
 		if strings.HasPrefix(label.Name, labelPrefix) {
 			branches = append(branches, strings.TrimPrefix(label.Name, labelPrefix))
 		}
@@ -118,6 +120,15 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	// if this fails at any point, create an issue on the repo with labels and the error message
 
+	return nil
+}
+
+func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch string) error {
+	// convert these into commits
+	_, err := s.client.PullRequests.AddLabel(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, fmt.Sprintf("%s%s", labelPrefix, branch))
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
