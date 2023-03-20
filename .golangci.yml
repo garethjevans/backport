@@ -73,6 +73,7 @@ linters:
     - goconst
     - gocyclo
     - godot
+    - godox
     - gofmt
     - goimports
     - goprintffuncname
@@ -82,6 +83,7 @@ linters:
     - misspell
     - nakedret
     - nolintlint
+    - staticcheck
     - stylecheck
     - testpackage
     - typecheck
@@ -89,22 +91,6 @@ linters:
     - unparam
     - unused
     - whitespace
-  # don't enable:
-  # - bodyclose https://github.com/timakin/bodyclose/issues/30
-  # - lll
-  # - gochecknoinits
-  # - govet
-  # - gocritic
-  # - exhaustive (TODO: enable after next release; current release at time of writing is v1.27)
-  # - gochecknoglobals
-    - godox
-  # - goerr113
-  # - nestif
-    - staticcheck
-    - prealloc
-  # - wsl
-  # - gomnd
-  # - scopelint
 issues:
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:

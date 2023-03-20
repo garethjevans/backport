@@ -71,7 +71,7 @@ func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	logrus.Infof("raw event %s", string(bodyBytes))
+	logrus.Debugf("raw event %s", string(bodyBytes))
 
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
@@ -106,130 +106,118 @@ func (o *Controller) handleWebhookOrPollRequest(w http.ResponseWriter, r *http.R
 func (o *Controller) ProcessWebHook(l *logrus.Entry, webhook scm.Webhook) (*logrus.Entry, string, error) {
 	repository := webhook.Repository()
 	fields := map[string]interface{}{
-		"Namespace": repository.Namespace,
-		"Name":      repository.Name,
-		"Branch":    repository.Branch,
-		"Link":      repository.Link,
-		"ID":        repository.ID,
-		"Clone":     repository.Clone,
-		"Webhook":   webhook.Kind(),
+		"Repo": fmt.Sprintf("%s/%s", repository.Namespace, repository.Name),
+		"Link": repository.Link,
+		"Kind": webhook.Kind(),
 	}
 
 	l = l.WithFields(fields)
-	l.WithField("WebHook", fmt.Sprintf("%+v", webhook)).Info("webhook")
 
-	_, ok := webhook.(*scm.PingHook)
-	if ok {
-		l.Info("received ping")
-		return l, "pong from backport", nil
+	switch webhook.Kind() {
+	case scm.WebhookKindBranch:
+		fallthrough
+	case scm.WebhookKindCheckRun:
+		fallthrough
+	case scm.WebhookKindCheckSuite:
+		fallthrough
+	case scm.WebhookKindDeploy:
+		fallthrough
+	case scm.WebhookKindDeploymentStatus:
+		fallthrough
+	case scm.WebhookKindFork:
+		fallthrough
+	case scm.WebhookKindInstallation:
+		fallthrough
+	case scm.WebhookKindInstallationRepository:
+		fallthrough
+	case scm.WebhookKindIssue:
+		fallthrough
+	case scm.WebhookKindLabel:
+		fallthrough
+	case scm.WebhookKindPing:
+		fallthrough
+	case scm.WebhookKindPush:
+		fallthrough
+	case scm.WebhookKindRelease:
+		fallthrough
+	case scm.WebhookKindRepository:
+		fallthrough
+	case scm.WebhookKindReview:
+		fallthrough
+	case scm.WebhookKindReviewCommentHook:
+		fallthrough
+	case scm.WebhookKindStar:
+		fallthrough
+	case scm.WebhookKindStatus:
+		fallthrough
+	case scm.WebhookKindTag:
+		fallthrough
+	case scm.WebhookKindWatch:
+		return l, fmt.Sprintf("ignored webhook %s", webhook.Kind()), nil
+	case scm.WebhookKindPullRequest:
+		prHook, ok := webhook.(*scm.PullRequestHook)
+		if ok {
+			action := prHook.Action
+			fields["Action"] = action.String()
+			pr := prHook.PullRequest
+			fields["PR.Number"] = pr.Number
+			fields["PR.Ref"] = pr.Ref
+			fields["PR.Sha"] = pr.Sha
+			fields["PR.Title"] = pr.Title
+			fields["PR.Body"] = pr.Body
+
+			l.Info("invoking PR handler")
+
+			o.handlePullRequestEvent(l, prHook)
+			return l, "processed PR hook", nil
+		}
+	case scm.WebhookKindPullRequestComment:
+		prCommentHook, ok := webhook.(*scm.PullRequestCommentHook)
+		if ok {
+			action := prCommentHook.Action
+			fields["Action"] = action.String()
+			pr := prCommentHook.PullRequest
+			fields["PR.Number"] = pr.Number
+			fields["PR.Ref"] = pr.Ref
+			fields["PR.Sha"] = pr.Sha
+			fields["PR.Title"] = pr.Title
+			fields["PR.Body"] = pr.Body
+			comment := prCommentHook.Comment
+			fields["Comment.Body"] = comment.Body
+			author := comment.Author
+			fields["Author.Name"] = author.Name
+			fields["Author.Login"] = author.Login
+			fields["Author.Avatar"] = author.Avatar
+
+			l.Info("invoking PR Comment handler")
+
+			o.handlePullRequestCommentEvent(l, *prCommentHook)
+			return l, "processed PR comment hook", nil
+		}
+
+	case scm.WebhookKindIssueComment:
+		issueCommentHook, ok := webhook.(*scm.IssueCommentHook)
+		if ok {
+			action := issueCommentHook.Action
+			issue := issueCommentHook.Issue
+			comment := issueCommentHook.Comment
+			sender := issueCommentHook.Sender
+			fields["Action"] = action.String()
+			fields["Issue.Number"] = issue.Number
+			fields["Issue.Title"] = issue.Title
+			fields["Issue.Body"] = issue.Body
+			fields["Comment.Body"] = comment.Body
+			fields["Sender.Body"] = sender.Name
+			fields["Sender.Login"] = sender.Login
+			fields["Kind"] = "IssueCommentHook"
+
+			l.Info("invoking Issue Comment handler")
+
+			o.handleIssueCommentEvent(l, *issueCommentHook)
+			return l, "processed issue comment hook", nil
+		}
 	}
 
-	pushHook, ok := webhook.(*scm.PushHook)
-	if ok {
-		fields["Ref"] = pushHook.Ref
-		fields["BaseRef"] = pushHook.BaseRef
-		fields["Commit.Sha"] = pushHook.Commit.Sha
-		fields["Commit.Link"] = pushHook.Commit.Link
-		fields["Commit.Author"] = pushHook.Commit.Author
-		fields["Commit.Message"] = pushHook.Commit.Message
-		fields["Commit.Committer.Name"] = pushHook.Commit.Committer.Name
-
-		l.Info("invoking Push handler")
-
-		//o.handlePushEvent(l, pushHook)
-		return l, "processed push hook", nil
-	}
-	prHook, ok := webhook.(*scm.PullRequestHook)
-	if ok {
-		action := prHook.Action
-		fields["Action"] = action.String()
-		pr := prHook.PullRequest
-		fields["PR.Number"] = pr.Number
-		fields["PR.Ref"] = pr.Ref
-		fields["PR.Sha"] = pr.Sha
-		fields["PR.Title"] = pr.Title
-		fields["PR.Body"] = pr.Body
-
-		l.Info("invoking PR handler")
-
-		o.handlePullRequestEvent(l, prHook)
-		return l, "processed PR hook", nil
-	}
-	branchHook, ok := webhook.(*scm.BranchHook)
-	if ok {
-		action := branchHook.Action
-		ref := branchHook.Ref
-		sender := branchHook.Sender
-		fields["Action"] = action.String()
-		fields["Ref.Sha"] = ref.Sha
-		fields["Sender.Name"] = sender.Name
-
-		l.Info("invoking branch handler")
-
-		//o.handleBranchEvent(l, branchHook)
-		return l, "processed branch hook", nil
-	}
-	issueCommentHook, ok := webhook.(*scm.IssueCommentHook)
-	if ok {
-		action := issueCommentHook.Action
-		issue := issueCommentHook.Issue
-		comment := issueCommentHook.Comment
-		sender := issueCommentHook.Sender
-		fields["Action"] = action.String()
-		fields["Issue.Number"] = issue.Number
-		fields["Issue.Title"] = issue.Title
-		fields["Issue.Body"] = issue.Body
-		fields["Comment.Body"] = comment.Body
-		fields["Sender.Body"] = sender.Name
-		fields["Sender.Login"] = sender.Login
-		fields["Kind"] = "IssueCommentHook"
-
-		l.Info("invoking Issue Comment handler")
-
-		o.handleIssueCommentEvent(l, *issueCommentHook)
-		return l, "processed issue comment hook", nil
-	}
-	prCommentHook, ok := webhook.(*scm.PullRequestCommentHook)
-	if ok {
-		action := prCommentHook.Action
-		fields["Action"] = action.String()
-		pr := prCommentHook.PullRequest
-		fields["PR.Number"] = pr.Number
-		fields["PR.Ref"] = pr.Ref
-		fields["PR.Sha"] = pr.Sha
-		fields["PR.Title"] = pr.Title
-		fields["PR.Body"] = pr.Body
-		comment := prCommentHook.Comment
-		fields["Comment.Body"] = comment.Body
-		author := comment.Author
-		fields["Author.Name"] = author.Name
-		fields["Author.Login"] = author.Login
-		fields["Author.Avatar"] = author.Avatar
-
-		l.Info("invoking PR Comment handler")
-
-		o.handlePullRequestCommentEvent(l, *prCommentHook)
-		return l, "processed PR comment hook", nil
-	}
-	prReviewHook, ok := webhook.(*scm.ReviewHook)
-	if ok {
-		action := prReviewHook.Action
-		fields["Action"] = action.String()
-		pr := prReviewHook.PullRequest
-		fields["PR.Number"] = pr.Number
-		fields["PR.Ref"] = pr.Ref
-		fields["PR.Sha"] = pr.Sha
-		fields["PR.Title"] = pr.Title
-		fields["PR.Body"] = pr.Body
-		fields["Review.State"] = prReviewHook.Review.State
-		fields["Reviewer.Name"] = prReviewHook.Review.Author.Name
-		fields["Reviewer.Login"] = prReviewHook.Review.Author.Login
-		fields["Reviewer.Avatar"] = prReviewHook.Review.Author.Avatar
-
-		l.Info("invoking PR Review handler")
-
-		return l, "processed PR review hook", nil
-	}
 	l.Debugf("unknown kind %s webhook %#v", webhook.Kind(), webhook)
 	return l, fmt.Sprintf("unknown hook %s", webhook.Kind()), nil
 }
@@ -243,7 +231,7 @@ func (o *Controller) handlePullRequestCommentEvent(l *logrus.Entry, hook scm.Pul
 	l.Infof("new comment '%s'", hook.Comment.Body)
 
 	body := hook.Comment.Body
-	o.handleComment(l, body)
+	o.handleComment(l, body, hook.PullRequest.Number)
 }
 
 func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueCommentHook) {
@@ -251,32 +239,60 @@ func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueComm
 	l.Infof("new comment '%s'", hook.Comment.Body)
 
 	body := hook.Comment.Body
-	o.handleComment(l, body)
+	o.handleComment(l, body, hook.Issue.Number)
+
+	parts := strings.Split(hook.Repo.FullName, "/")
+
+	err := o.applyBackports(l, "https://github.com", parts[0], parts[1], hook.Issue.Number)
+	if err != nil {
+		logrus.Errorf("Unable to apply backports %v", err)
+	}
 }
 
-func (o *Controller) handleComment(l *logrus.Entry, body string) {
+func (o *Controller) handleComment(l *logrus.Entry, body string, pr int) {
 	commentLines := strings.Split(body, "\n")
 	for _, line := range commentLines {
 		if strings.HasPrefix(line, "/backport") {
-			l.Infof("we are interested in this line '%s'", line)
+			l.Infof("we are interested in this line '%s' on PR-%d", line, pr)
 		}
 	}
+}
 
-	// FIXME this should not be here
-	s := service.NewService()
-	u, _, err := s.GetCredentials("https://github.com")
-	l.Infof("username=%s, password=XXX, err=%v", u, err)
+func (o *Controller) applyBackports(l *logrus.Entry, host string, owner string, repo string, pr int) error {
+	k := service.NewKubernetes()
+	u, t, err := k.GetCredentials(host)
+	if err != nil {
+		return err
+	}
+
+	l.Debugf("username=%s, password=XXX", u)
+
+	s := service.NewScm(host, t)
+	commits, err := s.ListCommitsForPr(owner, repo, pr)
+	if err != nil {
+		return err
+	}
+
+	l.Infof("commits=%s", commits)
+
+	branches, err := s.DetermineBranchesForPr(owner, repo, pr)
+	if err != nil {
+		return err
+	}
+
+	l.Infof("branches=%s", branches)
+
+	return nil
 }
 
 func (o *Controller) handlePullRequestEvent(l *logrus.Entry, hook *scm.PullRequestHook) {
-	// msg=webhook
-	// Branch=main
-	// Clone="https://github.com/garethjevans/backport.git"
-	// ID=613319709
-	// Link="https://github.com/garethjevans/backport"
-	// Name=backport
-	// Namespace=garethjevans
-	// WebHook="&{Action:closed Repo:{ID:613319709 Namespace:garethjevans Name:backport FullName:garethjevans/backport Perm:<nil> Branch:main Private:false Archived:false Clone:https://github.com/garethjevans/backport.git CloneSSH:git@github.com:garethjevans/backport.git Link:https://github.com/garethjevans/backport Created:0001-01-01 00:00:00 +0000 UTC Updated:0001-01-01 00:00:00 +0000 UTC} Label:{ID:0 URL: Name: Description: Color:} PullRequest:{Number:1 Title:Update README.md Body: Labels:[] Sha:32a5035217faf1ca942b1068b6cbdcf8de2010b0 Ref:refs/pull/1/head Source:garethjevans-patch-1 Target:main Base:{Ref:main Sha:7a3d50f1224b213351cd261c0367206e72ebb0e6 Repo:{ID:613319709 Namespace:garethjevans Name:backport FullName:garethjevans/backport Perm:0xc0002cf099 Branch:main Private:false Archived:false Clone:https://github.com/garethjevans/backport.git CloneSSH:git@github.com:garethjevans/backport.git Link:https://github.com/garethjevans/backport Created:2023-03-13 10:45:28 +0000 UTC Updated:2023-03-13 10:48:57 +0000 UTC}} Head:{Ref:garethjevans-patch-1 Sha:32a5035217faf1ca942b1068b6cbdcf8de2010b0 Repo:{ID:613319709 Namespace:garethjevans Name:backport FullName:garethjevans/backport Perm:0xc0002cf0c9 Branch:main Private:false Archived:false Clone:https://github.com/garethjevans/backport.git CloneSSH:git@github.com:garethjevans/backport.git Link:https://github.com/garethjevans/backport Created:2023-03-13 10:45:28 +0000 UTC Updated:2023-03-13 10:48:57 +0000 UTC}} Fork:garethjevans/backport State:closed Closed:true Draft:false Merged:true Mergeable:false Rebaseable:false MergeableState: MergeSha:e2268af2b3ef876f856a2baf5b47ac32f8d3a5de Author:{ID:158150 Login:garethjevans Name: Email: Avatar:https://avatars.githubusercontent.com/u/158150?v=4 Link:https://github.com/garethjevans IsAdmin:false Created:0001-01-01 00:00:00 +0000 UTC Updated:0001-01-01 00:00:00 +0000 UTC} Assignees:[] Reviewers:[] Milestone:{Number:0 ID:0 Title: Description: Link: State: DueDate:<nil>} Created:2023-03-14 16:51:47 +0000 UTC Updated:2023-03-15 16:39:26 +0000 UTC Link:https://github.com/garethjevans/backport/pull/1 DiffLink:https://github.com/garethjevans/backport/pull/1.diff} Sender:{ID:158150 Login:garethjevans Name: Email: Avatar:https://avatars.githubusercontent.com/u/158150?v=4 Link:https://github.com/garethjevans IsAdmin:false Created:0001-01-01 00:00:00 +0000 UTC Updated:0001-01-01 00:00:00 +0000 UTC} Changes:{Base:{Ref:{From:} Sha:{From:} Repo:{ID: Namespace: Name: FullName: Perm:<nil> Branch: Private:false Archived:false Clone: CloneSSH: Link: Created:0001-01-01 00:00:00 +0000 UTC Updated:0001-01-01 00:00:00 +0000 UTC}}} GUID:f34dac60-c34f-11ed-8673-b8ca42b8009f Installation:<nil>}" Webhook=pull_request
+	l.Infof("handling comment on Issue %d", hook.PullRequest.Number)
+	parts := strings.Split(hook.Repo.FullName, "/")
+
+	err := o.applyBackports(l, "https://github.com", parts[0], parts[1], hook.PullRequest.Number)
+	if err != nil {
+		logrus.Errorf("Unable to apply backports %v", err)
+	}
 }
 
 func responseHTTPError(w http.ResponseWriter, statusCode int, response string) {
