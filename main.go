@@ -41,6 +41,8 @@ func main() {
 		Addr:              fmt.Sprintf(":%s", port()),
 	}
 
+	logrus.Infof("binding to %s", port())
+	
 	err := srv.ListenAndServe()
 	if err != nil {
 		panic(err)
