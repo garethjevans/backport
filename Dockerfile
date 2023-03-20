@@ -5,12 +5,12 @@ FROM $BUILDER_IMAGE AS build
 
     WORKDIR /app
     ADD . .
-    RUN go build -o backport ./...
+    RUN go build -o backport main.go
 
 
 FROM $RUNTIME_IMAGE AS runtime
 
-	ENV PORT=8080
-	EXPOSE 8080
+    ENV PORT=8080
+    EXPOSE 8080
     COPY --from=build /app/backport /backport
     CMD [ "/backport" ]
