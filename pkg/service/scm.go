@@ -137,9 +137,10 @@ func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch s
 }
 
 func executeGit(dir string, args ...string) (string, error) {
+	logrus.Infof("Running git %s", strings.Join(args, " "))
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	stdout, err := cmd.Output()
+	stdout, err := cmd.CombinedOutput()
 
 	if err != nil {
 		return "", err
