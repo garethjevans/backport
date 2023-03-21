@@ -15,7 +15,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const labelPrefix = "Backport to "
+const (
+	black       = "000000"
+	labelPrefix = "Backport to "
+)
 
 type Scm interface {
 	ListCommitsForPr(owner string, repo string, pr int) ([]string, error)
@@ -147,7 +150,11 @@ func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch s
 
 	if !exists {
 		path := fmt.Sprintf("repos/%s/labels", fmt.Sprintf("%s/%s", owner, repo))
-		data, err := json.Marshal(label{name: labelName, description: "", color: "#000000"})
+		data, err := json.Marshal(label{
+			name:        labelName,
+			description: fmt.Sprintf("When this PR is merged, backport this to %s", branch),
+			color:       black,
+		})
 		if err != nil {
 			return err
 		}
@@ -177,10 +184,5 @@ func executeGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	stdout, err := cmd.CombinedOutput()
-
-	if err != nil {
-		return "", err
-	}
-
-	return string(stdout), nil
+	return string(stdout), err
 }
