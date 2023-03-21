@@ -302,12 +302,17 @@ func (o *Controller) applyBackports(l *logrus.Entry, host string, owner string, 
 }
 
 func (o *Controller) handlePullRequestEvent(l *logrus.Entry, hook *scm.PullRequestHook) {
-	l.Infof("handling comment on Issue %d", hook.PullRequest.Number)
-	parts := strings.Split(hook.Repo.FullName, "/")
+	l.Infof("handling pull request event %d", hook.PullRequest.Number)
 
-	err := o.applyBackports(l, "https://github.com", parts[0], parts[1], hook.PullRequest.Number)
-	if err != nil {
-		logrus.Errorf("Unable to apply backports %v", err)
+	// need to filter on these, we are currently getting to many.
+	// only do it on merge?
+	if hook.Action.String() == "closed" && hook.PullRequest.Merged {
+		parts := strings.Split(hook.Repo.FullName, "/")
+
+		err := o.applyBackports(l, "https://github.com", parts[0], parts[1], hook.PullRequest.Number)
+		if err != nil {
+			logrus.Errorf("Unable to apply backports %v", err)
+		}
 	}
 }
 
