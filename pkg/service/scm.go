@@ -83,6 +83,8 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	}
 	defer os.Remove(file.Name())
 
+	logrus.Infof("running in directory %s", file.Name())
+
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
 	o, err := executeGit(file.Name(), "clone", gitURL)
 	if err != nil {
