@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -128,12 +130,44 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch string) error {
 	labelName := fmt.Sprintf("%s%s", labelPrefix, branch)
 	logrus.Infof("Applying label %s to repo for %s/%s/pulls/%d", labelName, owner, repo, pr)
+
+	labels, _, err := s.client.Repositories.ListLabels(context.Background(), fmt.Sprintf("%s/%s", owner, repo), &scm.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	exists := false
+	for _, label := range labels {
+		if label.Name == labelName {
+			exists = true
+		}
+	}
+
+	if !exists {
+		path := fmt.Sprintf("repos/%s/labels", fmt.Sprintf("%s/%s", owner, repo))
+		data, err := json.Marshal(label{name: labelName, description: "", color: "#000000"})
+		if err != nil {
+			return err
+		}
+		req := &scm.Request{Method: "POST", Path: path, Body: bytes.NewReader(data)}
+		_, err = s.client.Do(context.Background(), req)
+		if err != nil {
+			return err
+		}
+	}
+
 	// convert these into commits
-	_, err := s.client.PullRequests.AddLabel(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, labelName)
+	_, err = s.client.PullRequests.AddLabel(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, labelName)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+type label struct {
+	name        string
+	description string
+	color       string
 }
 
 func executeGit(dir string, args ...string) (string, error) {

@@ -235,7 +235,7 @@ func (o *Controller) handlePullRequestCommentEvent(l *logrus.Entry, hook scm.Pul
 	parts := strings.Split(hook.Repo.FullName, "/")
 	err := o.handleComment(l, "https://github.com", parts[0], parts[1], body, hook.PullRequest.Number)
 	if err != nil {
-		logrus.Errorf("Unable to apply backports %v", err)
+		logrus.Errorf("Unable to handle PR comment: %v", err)
 	}
 }
 
@@ -248,7 +248,7 @@ func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueComm
 	parts := strings.Split(hook.Repo.FullName, "/")
 	err := o.handleComment(l, "https://github.com", parts[0], parts[1], body, hook.Issue.Number)
 	if err != nil {
-		logrus.Errorf("Unable to apply backports %v", err)
+		logrus.Errorf("Unable to handle issue comment: %v", err)
 	}
 }
 
