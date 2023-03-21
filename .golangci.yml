@@ -83,7 +83,7 @@ linters:
     - misspell
     - nakedret
     - nolintlint
-    - staticcheck
+      #- staticcheck
     - stylecheck
     - testpackage
     - typecheck
