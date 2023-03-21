@@ -263,6 +263,14 @@ func (o *Controller) handleComment(l *logrus.Entry, host string, owner string, r
 				return err
 			}
 		}
+
+		// we should remove this later
+		if line == "/test-backport" {
+			err := o.applyBackports(l, "https://github.com", owner, repo, pr)
+			if err != nil {
+				logrus.Errorf("Unable to apply backports %v", err)
+			}
+		}
 	}
 	return nil
 }
