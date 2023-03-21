@@ -180,7 +180,7 @@ type label struct {
 }
 
 func executeGit(dir string, args ...string) (string, error) {
-	logrus.Infof("Running git %s", strings.Join(args, " "))
+	logrus.Infof("Running git %s in dir %s", strings.Join(args, " "), dir)
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	stdout, err := cmd.CombinedOutput()
