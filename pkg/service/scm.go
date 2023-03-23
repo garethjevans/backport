@@ -90,42 +90,42 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
 	o, err := executeGit(file, "clone", gitURL)
+	logrus.Infof("clone> %s", o)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("clone> %s", o)
 
 	path := filepath.Join(file, repo)
 
 	o, err = executeGit(path, "checkout", "", branch)
+	logrus.Infof("checkout> %s", o)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("checkout> %s", o)
 
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
 	o, err = executeGit(path, "checkout", "-b", backportBranchName)
+	logrus.Infof("checkout -b> %s", o)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("checkout -b> %s", o)
 
 	// apply commits in order
 	for _, commit := range commits {
 		logrus.Infof("cherry-picking %s", commit)
 		o, err = executeGit(path, "cherry-pick", commit)
+		logrus.Infof("cherry-pick> %s", o)
 		if err != nil {
 			return err
 		}
-		logrus.Infof("cherry-pick> %s", o)
 	}
 
 	logrus.Infof("pushing %s", backportBranchName)
 	o, err = executeGit(path, "push", "origin", backportBranchName)
+	logrus.Infof("push> %s", o)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("push> %s", o)
 
 	// if this fails at any point, create an issue on the repo with labels and the error message
 
