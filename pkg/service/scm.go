@@ -80,22 +80,22 @@ func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]s
 func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch string, commits []string) error {
 	logrus.Infof("Applying commits to repo for %s/%s/pulls/%d", owner, repo, pr)
 	// clone repository to a temporary directory
-	file, err := os.CreateTemp("", "git-worker")
+	file, err := os.MkdirTemp("", "git-worker")
 	if err != nil {
 		logrus.Fatalf("unable to create temp dir %v", err)
 	}
-	defer os.Remove(file.Name())
+	defer os.RemoveAll(file)
 
-	logrus.Infof("running in directory %s", file.Name())
+	logrus.Infof("running in directory %s", file)
 
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
-	o, err := executeGit(file.Name(), "clone", gitURL)
+	o, err := executeGit(file, "clone", gitURL)
 	if err != nil {
 		return err
 	}
 	logrus.Infof("clone> %s", o)
 
-	path := filepath.Join(file.Name(), repo)
+	path := filepath.Join(file, repo)
 
 	o, err = executeGit(path, "checkout", "", branch)
 	if err != nil {
