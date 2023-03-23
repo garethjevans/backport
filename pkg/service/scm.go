@@ -97,7 +97,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	path := filepath.Join(file, repo)
 
-	o, err = executeGit(path, "checkout", "", branch)
+	o, err = executeGit(path, "checkout", branch)
 	logrus.Infof("checkout> %s", o)
 	if err != nil {
 		return err
