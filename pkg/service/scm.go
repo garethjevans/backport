@@ -80,8 +80,9 @@ func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]s
 }
 
 func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch string, commits []string) error {
-	var messages []string
-	messages = append(messages, "```")
+	gitter := observableGitter{}
+	gitter.messages = append(gitter.messages, "```")
+
 	logrus.Infof("Applying commits to repo for %s/%s/pulls/%d", owner, repo, pr)
 	// clone repository to a temporary directory
 	file, err := os.MkdirTemp("", "git-worker")
@@ -93,87 +94,72 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	logrus.Infof("running in directory %s", file)
 
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
-	messages = append(messages, fmt.Sprintf("git clone %s", gitURL))
-
 	o, err := executeGit(file, "clone", gitURL)
 	logrus.Infof("clone> %s", o)
-	messages = append(messages, o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, messages)
+		s.notifyPr(owner, repo, pr, gitter)
 		return err
 	}
 
 	path := filepath.Join(file, repo)
 
-	messages = append(messages, fmt.Sprintf("git checkout %s", branch))
 	o, err = executeGit(path, "checkout", branch)
 	logrus.Infof("checkout> %s", o)
-	messages = append(messages, o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, messages)
+		s.notifyPr(owner, repo, pr, gitter)
 		return err
 	}
 
 	// determine a unique branch name
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
-	messages = append(messages, fmt.Sprintf("git checkout -b %s", backportBranchName))
 	o, err = executeGit(path, "checkout", "-b", backportBranchName)
 	logrus.Infof("checkout -b> %s", o)
-	messages = append(messages, o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, messages)
+		s.notifyPr(owner, repo, pr, gitter)
 		return err
 	}
 
-	messages = append(messages, fmt.Sprintf("git config --global user.email '%s@users.noreply.github.com'", s.username))
 	o, err = executeGit(path, "config", "--global user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
-	messages = append(messages, o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, messages)
+		s.notifyPr(owner, repo, pr, gitter)
 		return err
 	}
 
-	messages = append(messages, fmt.Sprintf("git config --global user.name '%s'", s.username))
 	o, err = executeGit(path, "config", "--global user.name", s.username)
-	messages = append(messages, o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, messages)
+		s.notifyPr(owner, repo, pr, gitter)
 		return err
 	}
 
 	// apply commits in order
 	for _, commit := range commits {
 		logrus.Infof("cherry-picking %s", commit)
-		messages = append(messages, fmt.Sprintf("git cherry-pick %s", commit))
 		o, err = executeGit(path, "cherry-pick", commit)
 		logrus.Infof("cherry-pick> %s", o)
-		messages = append(messages, o)
 		if err != nil {
-			s.notifyPr(owner, repo, pr, messages)
+			s.notifyPr(owner, repo, pr, gitter)
 			return err
 		}
 	}
 
 	logrus.Infof("pushing %s", backportBranchName)
-	messages = append(messages, fmt.Sprintf("git push origin %s", backportBranchName))
 	o, err = executeGit(path, "push", "origin", backportBranchName)
 	logrus.Infof("push> %s", o)
-	messages = append(messages, o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, messages)
+		s.notifyPr(owner, repo, pr, gitter)
 		return err
 	}
 
 	// if this fails at any point, create an issue on the repo with labels and the error message
-	s.notifyPr(owner, repo, pr, messages)
+	s.notifyPr(owner, repo, pr, gitter)
 
 	return nil
 }
 
-func (s *scmImpl) notifyPr(owner string, repo string, pr int, messages []string) error {
-	messages = append(messages, "```")
+func (s *scmImpl) notifyPr(owner string, repo string, pr int, gitter observableGitter) error {
+	gitter.messages = append(gitter.messages, "```")
 	_, _, err := s.client.PullRequests.CreateComment(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, &scm.CommentInput{
-		Body: strings.Join(messages, "\n"),
+		Body: strings.Join(gitter.messages, "\n"),
 	})
 	return err
 }
@@ -231,4 +217,16 @@ func executeGit(dir string, args ...string) (string, error) {
 	cmd.Dir = dir
 	stdout, err := cmd.CombinedOutput()
 	return string(stdout), err
+}
+
+type observableGitter struct {
+	messages []string
+}
+
+func (o *observableGitter) executeGit(dir string, args ...string) (string, error) {
+	o.messages = append(o.messages, fmt.Sprintf("git %s", strings.Join(args, " ")))
+	output, err := executeGit(dir, args...)
+	o.messages = append(o.messages, output)
+
+	return output, err
 }
