@@ -78,6 +78,8 @@ func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]s
 }
 
 func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch string, commits []string) error {
+	var messages []string
+	messages = append(messages, "```")
 	logrus.Infof("Applying commits to repo for %s/%s/pulls/%d", owner, repo, pr)
 	// clone repository to a temporary directory
 	file, err := os.MkdirTemp("", "git-worker")
@@ -91,7 +93,9 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
 	o, err := executeGit(file, "clone", gitURL)
 	logrus.Infof("clone> %s", o)
+	messages = append(messages, o)
 	if err != nil {
+		s.notifyPr(owner, repo, pr, messages)
 		return err
 	}
 
@@ -99,14 +103,18 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	o, err = executeGit(path, "checkout", branch)
 	logrus.Infof("checkout> %s", o)
+	messages = append(messages, o)
 	if err != nil {
+		s.notifyPr(owner, repo, pr, messages)
 		return err
 	}
 
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
 	o, err = executeGit(path, "checkout", "-b", backportBranchName)
 	logrus.Infof("checkout -b> %s", o)
+	messages = append(messages, o)
 	if err != nil {
+		s.notifyPr(owner, repo, pr, messages)
 		return err
 	}
 
@@ -115,7 +123,9 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		logrus.Infof("cherry-picking %s", commit)
 		o, err = executeGit(path, "cherry-pick", commit)
 		logrus.Infof("cherry-pick> %s", o)
+		messages = append(messages, o)
 		if err != nil {
+			s.notifyPr(owner, repo, pr, messages)
 			return err
 		}
 	}
@@ -123,13 +133,24 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	logrus.Infof("pushing %s", backportBranchName)
 	o, err = executeGit(path, "push", "origin", backportBranchName)
 	logrus.Infof("push> %s", o)
+	messages = append(messages, o)
 	if err != nil {
+		s.notifyPr(owner, repo, pr, messages)
 		return err
 	}
 
 	// if this fails at any point, create an issue on the repo with labels and the error message
+	s.notifyPr(owner, repo, pr, messages)
 
 	return nil
+}
+
+func (s *scmImpl) notifyPr(owner string, repo string, pr int, messages []string) error {
+	messages = append(messages, "```")
+	_, _, err := s.client.PullRequests.CreateComment(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, &scm.CommentInput{
+		Body: strings.Join(messages, "\n"),
+	})
+	return err
 }
 
 func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch string) error {
