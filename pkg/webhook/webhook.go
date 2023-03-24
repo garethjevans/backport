@@ -284,7 +284,7 @@ func (o *Controller) applyBackports(l *logrus.Entry, host string, owner string, 
 
 	l.Debugf("username=%s, password=XXX", u)
 
-	s := service.NewScm(host, t)
+	s := service.NewScm(host, u, t)
 	commits, err := s.ListCommitsForPr(owner, repo, pr)
 	if err != nil {
 		return err
@@ -333,7 +333,7 @@ func (o *Controller) notifyPr(l *logrus.Entry, host string, owner string, repo s
 
 	l.Debugf("username=%s, password=XXX", u)
 
-	s := service.NewScm(host, t)
+	s := service.NewScm(host, u, t)
 	err = s.AddBranchLabelToPr(owner, repo, pr, branch)
 	if err != nil {
 		return err

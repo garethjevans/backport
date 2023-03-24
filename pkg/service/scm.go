@@ -28,18 +28,20 @@ type Scm interface {
 }
 
 type scmImpl struct {
-	client *scm.Client
-	host   string
+	client   *scm.Client
+	host     string
+	username string
 }
 
-func NewScm(host string, token string) Scm {
+func NewScm(host string, username string, token string) Scm {
 	c, err := factory.NewClient("github", host, token)
 	if err != nil {
 		panic(err)
 	}
 	return &scmImpl{
-		client: c,
-		host:   host,
+		client:   c,
+		host:     host,
+		username: username,
 	}
 }
 
@@ -91,6 +93,8 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	logrus.Infof("running in directory %s", file)
 
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
+	messages = append(messages, fmt.Sprintf("git clone %s", gitURL))
+
 	o, err := executeGit(file, "clone", gitURL)
 	logrus.Infof("clone> %s", o)
 	messages = append(messages, o)
@@ -101,6 +105,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	path := filepath.Join(file, repo)
 
+	messages = append(messages, fmt.Sprintf("git checkout %s", branch))
 	o, err = executeGit(path, "checkout", branch)
 	logrus.Infof("checkout> %s", o)
 	messages = append(messages, o)
@@ -109,7 +114,9 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		return err
 	}
 
+	// determine a unique branch name
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
+	messages = append(messages, fmt.Sprintf("git checkout -b %s", backportBranchName))
 	o, err = executeGit(path, "checkout", "-b", backportBranchName)
 	logrus.Infof("checkout -b> %s", o)
 	messages = append(messages, o)
@@ -121,6 +128,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	// apply commits in order
 	for _, commit := range commits {
 		logrus.Infof("cherry-picking %s", commit)
+		messages = append(messages, fmt.Sprintf("git cherry-pick %s", commit))
 		o, err = executeGit(path, "cherry-pick", commit)
 		logrus.Infof("cherry-pick> %s", o)
 		messages = append(messages, o)
@@ -130,7 +138,24 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		}
 	}
 
+	messages = append(messages, fmt.Sprintf("git config --global user.email '%s@users.noreply.github.com'", s.username))
+	o, err = executeGit(path, "config", "--global user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
+	messages = append(messages, o)
+	if err != nil {
+		s.notifyPr(owner, repo, pr, messages)
+		return err
+	}
+
+	messages = append(messages, fmt.Sprintf("git config --global user.name '%s'", s.username))
+	o, err = executeGit(path, "config", "--global user.name", s.username)
+	messages = append(messages, o)
+	if err != nil {
+		s.notifyPr(owner, repo, pr, messages)
+		return err
+	}
+
 	logrus.Infof("pushing %s", backportBranchName)
+	messages = append(messages, fmt.Sprintf("git push origin %s", backportBranchName))
 	o, err = executeGit(path, "push", "origin", backportBranchName)
 	logrus.Infof("push> %s", o)
 	messages = append(messages, o)
