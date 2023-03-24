@@ -125,19 +125,6 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		return err
 	}
 
-	// apply commits in order
-	for _, commit := range commits {
-		logrus.Infof("cherry-picking %s", commit)
-		messages = append(messages, fmt.Sprintf("git cherry-pick %s", commit))
-		o, err = executeGit(path, "cherry-pick", commit)
-		logrus.Infof("cherry-pick> %s", o)
-		messages = append(messages, o)
-		if err != nil {
-			s.notifyPr(owner, repo, pr, messages)
-			return err
-		}
-	}
-
 	messages = append(messages, fmt.Sprintf("git config --global user.email '%s@users.noreply.github.com'", s.username))
 	o, err = executeGit(path, "config", "--global user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
 	messages = append(messages, o)
@@ -152,6 +139,19 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	if err != nil {
 		s.notifyPr(owner, repo, pr, messages)
 		return err
+	}
+
+	// apply commits in order
+	for _, commit := range commits {
+		logrus.Infof("cherry-picking %s", commit)
+		messages = append(messages, fmt.Sprintf("git cherry-pick %s", commit))
+		o, err = executeGit(path, "cherry-pick", commit)
+		logrus.Infof("cherry-pick> %s", o)
+		messages = append(messages, o)
+		if err != nil {
+			s.notifyPr(owner, repo, pr, messages)
+			return err
+		}
 	}
 
 	logrus.Infof("pushing %s", backportBranchName)
