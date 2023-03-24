@@ -80,8 +80,7 @@ func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]s
 }
 
 func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch string, commits []string) error {
-	gitter := observableGitter{}
-	gitter.messages = append(gitter.messages, "```")
+	gitter := newGitter()
 
 	logrus.Infof("Applying commits to repo for %s/%s/pulls/%d", owner, repo, pr)
 	// clone repository to a temporary directory
@@ -212,11 +211,17 @@ type label struct {
 }
 
 func executeGit(dir string, args ...string) (string, error) {
-	logrus.Infof("Running git %s in dir %s", strings.Join(args, " "), dir)
+	logrus.Infof("> git %s in dir %s", strings.Join(args, " "), dir)
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	stdout, err := cmd.CombinedOutput()
 	return string(stdout), err
+}
+
+func newGitter() observableGitter {
+	return observableGitter{
+		messages: []string{"```"},
+	}
 }
 
 type observableGitter struct {
