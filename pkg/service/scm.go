@@ -119,13 +119,13 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		return err
 	}
 
-	o, err = executeGit(path, "config", "--global user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
+	o, err = executeGit(path, "config", "--global", "user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter)
 		return err
 	}
 
-	o, err = executeGit(path, "config", "--global user.name", s.username)
+	o, err = executeGit(path, "config", "--global", "user.name", s.username)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter)
 		return err
