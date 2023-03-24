@@ -96,7 +96,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	o, err := executeGit(file, "clone", gitURL)
 	logrus.Infof("clone> %s", o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter)
+		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
@@ -105,7 +105,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	o, err = executeGit(path, "checkout", branch)
 	logrus.Infof("checkout> %s", o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter)
+		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
@@ -114,19 +114,19 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	o, err = executeGit(path, "checkout", "-b", backportBranchName)
 	logrus.Infof("checkout -b> %s", o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter)
+		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
 	o, err = executeGit(path, "config", "--global", "user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter)
+		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
 	o, err = executeGit(path, "config", "--global", "user.name", s.username)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter)
+		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
@@ -136,7 +136,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		o, err = executeGit(path, "cherry-pick", commit)
 		logrus.Infof("cherry-pick> %s", o)
 		if err != nil {
-			s.notifyPr(owner, repo, pr, gitter)
+			s.notifyPr(owner, repo, pr, gitter.messages)
 			return err
 		}
 	}
@@ -145,20 +145,20 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	o, err = executeGit(path, "push", "origin", backportBranchName)
 	logrus.Infof("push> %s", o)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter)
+		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
 	// if this fails at any point, create an issue on the repo with labels and the error message
-	s.notifyPr(owner, repo, pr, gitter)
+	s.notifyPr(owner, repo, pr, gitter.messages)
 
 	return nil
 }
 
-func (s *scmImpl) notifyPr(owner string, repo string, pr int, gitter observableGitter) error {
-	gitter.messages = append(gitter.messages, "```")
+func (s *scmImpl) notifyPr(owner string, repo string, pr int, messages []string) error {
+	messages = append(messages, "```")
 	_, _, err := s.client.PullRequests.CreateComment(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, &scm.CommentInput{
-		Body: strings.Join(gitter.messages, "\n"),
+		Body: strings.Join(messages, "\n"),
 	})
 	return err
 }
