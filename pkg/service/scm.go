@@ -31,6 +31,7 @@ type scmImpl struct {
 	client   *scm.Client
 	host     string
 	username string
+	token    string
 }
 
 func NewScm(host string, username string, token string) Scm {
@@ -42,6 +43,7 @@ func NewScm(host string, username string, token string) Scm {
 		client:   c,
 		host:     host,
 		username: username,
+		token:    token,
 	}
 }
 
@@ -93,7 +95,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	logrus.Infof("running in directory %s", file)
 
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
-	_, err = executeGit(file, "clone", gitURL)
+	_, err = gitter.executeGit(file, "clone", gitURL)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
@@ -101,7 +103,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	path := filepath.Join(file, repo)
 
-	_, err = executeGit(path, "checkout", branch)
+	_, err = gitter.executeGit(path, "checkout", branch)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
@@ -109,19 +111,19 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	// determine a unique branch name
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
-	_, err = executeGit(path, "checkout", "-b", backportBranchName)
+	_, err = gitter.executeGit(path, "checkout", "-b", backportBranchName)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
-	_, err = executeGit(path, "config", "user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
+	_, err = gitter.executeGit(path, "config", "user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
-	_, err = executeGit(path, "config", "user.name", s.username)
+	_, err = gitter.executeGit(path, "config", "user.name", s.username)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
@@ -130,15 +132,22 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	// apply commits in order
 	for _, commit := range commits {
 		logrus.Infof("cherry-picking %s", commit)
-		_, err = executeGit(path, "cherry-pick", commit)
+		_, err = gitter.executeGit(path, "cherry-pick", commit)
 		if err != nil {
 			s.notifyPr(owner, repo, pr, gitter.messages)
 			return err
 		}
 	}
 
+	// dont use the gitter to avoid logging
+	_, err = executeGit(path, "config", fmt.Sprintf("url.\"https://%s:%s@github\".insteadOf", s.username, s.token), "https://github.com")
+	if err != nil {
+		s.notifyPr(owner, repo, pr, gitter.messages)
+		return err
+	}
+	
 	logrus.Infof("pushing %s", backportBranchName)
-	_, err = executeGit(path, "push", "origin", backportBranchName)
+	_, err = gitter.executeGit(path, "push", "origin", backportBranchName)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
