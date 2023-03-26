@@ -93,8 +93,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	logrus.Infof("running in directory %s", file)
 
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
-	o, err := executeGit(file, "clone", gitURL)
-	logrus.Infof("clone> %s", o)
+	_, err = executeGit(file, "clone", gitURL)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
@@ -102,8 +101,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	path := filepath.Join(file, repo)
 
-	o, err = executeGit(path, "checkout", branch)
-	logrus.Infof("checkout> %s", o)
+	_, err = executeGit(path, "checkout", branch)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
@@ -111,20 +109,19 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	// determine a unique branch name
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
-	o, err = executeGit(path, "checkout", "-b", backportBranchName)
-	logrus.Infof("checkout -b> %s", o)
+	_, err = executeGit(path, "checkout", "-b", backportBranchName)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
-	o, err = executeGit(path, "config", "--global", "user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
+	_, err = executeGit(path, "config", "--global", "user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
-	o, err = executeGit(path, "config", "--global", "user.name", s.username)
+	_, err = executeGit(path, "config", "--global", "user.name", s.username)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
@@ -133,8 +130,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	// apply commits in order
 	for _, commit := range commits {
 		logrus.Infof("cherry-picking %s", commit)
-		o, err = executeGit(path, "cherry-pick", commit)
-		logrus.Infof("cherry-pick> %s", o)
+		_, err = executeGit(path, "cherry-pick", commit)
 		if err != nil {
 			s.notifyPr(owner, repo, pr, gitter.messages)
 			return err
@@ -142,8 +138,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	}
 
 	logrus.Infof("pushing %s", backportBranchName)
-	o, err = executeGit(path, "push", "origin", backportBranchName)
-	logrus.Infof("push> %s", o)
+	_, err = executeGit(path, "push", "origin", backportBranchName)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
@@ -215,6 +210,7 @@ func executeGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	stdout, err := cmd.CombinedOutput()
+	logrus.Infof("< %s", stdout)
 	return string(stdout), err
 }
 
