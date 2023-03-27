@@ -140,7 +140,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	}
 
 	// don't use the gitter to avoid logging
-	_, err = executeGit(path, "config", fmt.Sprintf("url.'https://%s:%s@github.com'.insteadOf", s.username, s.token), "'https://github.com'")
+	_, err = executeGit(path, "config", fmt.Sprintf("url.https://%s:%s@github.com.insteadOf", s.username, s.token), "https://github.com")
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
@@ -154,7 +154,7 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		return err
 	}
 
-	logrus.Infof(".git/config is %s", string(b))
+	fmt.Printf(".git/config is \n\n%s\n\n", string(b))
 
 	logrus.Infof("pushing %s", backportBranchName)
 	_, err = gitter.executeGit(path, "push", "origin", backportBranchName)
