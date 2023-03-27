@@ -4,18 +4,39 @@ a tool to aid with the backporting of PRs
 
 ## to build with TAP
 
+### Workload for Configuration
+
 ```
-❯ tanzu apps workload create backport \
-  --namespace dev \
-  --git-branch main \
-  --git-repo https://github.com/garethjevans/backport \
-  --label apps.tanzu.vmware.com/has-tests=true \
-  --label app.kubernetes.io/part-of=backport \
-  --type web \
-  --param-yaml testing_pipeline_matching_labels='{"apps.tanzu.vmware.com/pipeline":"golang-pipeline"}' \
-  --param dockerfile=./Dockerfile \
-   --yes
+apiVersion: carto.run/v1alpha1
+kind: Workload
+metadata:
+  labels:
+    app.kubernetes.io/part-of: backport
+    apps.tanzu.vmware.com/has-tests: "true"
+    apps.tanzu.vmware.com/workload-type: web
+  name: backport
+  namespace: dev
+spec:
+  env:
+  - name: LOG_LEVEL
+    value: info
+  params:
+  - name: annotations
+    value:
+      autoscaling.knative.dev/min-scale: "1"
+  - name: testing_pipeline_matching_labels
+    value:
+      apps.tanzu.vmware.com/pipeline: golang-pipeline
+  - name: dockerfile
+    value: ./Dockerfile
+  source:
+    git:
+      ref:
+        branch: main
+      url: https://github.com/garethjevans/backport
 ```
+
+### Golang Pipeline
 
 ```
 apiVersion: tekton.dev/v1beta1
