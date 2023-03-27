@@ -147,18 +147,33 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	}
 
 	// before we try to push, lets take a look at our local git config
-	gc := filepath.Join(path, ".git", "config")
-	b, err := os.ReadFile(gc)
+	//gc := filepath.Join(path, ".git", "config")
+	//b, err := os.ReadFile(gc)
+	//if err != nil {
+	//	s.notifyPr(owner, repo, pr, gitter.messages)
+	//	return err
+	//}
+	//
+	//fmt.Printf(".git/config is \n\n%s\n\n", string(b))
+
+	logrus.Infof("pushing %s", backportBranchName)
+	_, err = gitter.executeGit(path, "push", "origin", backportBranchName)
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
 
-	fmt.Printf(".git/config is \n\n%s\n\n", string(b))
+	logrus.Infof("creating PR")
+	prInput := scm.PullRequestInput{
+		Title: fmt.Sprintf("Backporting PR-%d to %s", pr, branch),
+		Head:  backportBranchName,
+		Base:  branch,
+		Body:  fmt.Sprintf("Backport from %s/%s/%s/pulls/%d", s.host, owner, repo, pr),
+	}
 
-	logrus.Infof("pushing %s", backportBranchName)
-	_, err = gitter.executeGit(path, "push", "origin", backportBranchName)
+	pullRequest, _, err := s.client.PullRequests.Create(context.Background(), fmt.Sprintf("%s/%s", owner, repo), &prInput)
 	if err != nil {
+		gitter.messages = append(gitter.messages, fmt.Sprintf("Created PR %s/%s/%s/pulls/%d", s.host, owner, repo, pullRequest.Number))
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
