@@ -139,13 +139,13 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		}
 	}
 
-	// dont use the gitter to avoid logging
-	_, err = executeGit(path, "config", fmt.Sprintf("url.\"https://%s:%s@github\".insteadOf", s.username, s.token), "https://github.com")
+	// don't use the gitter to avoid logging
+	_, err = executeGit(path, "config", fmt.Sprintf("url.'https://%s:%s@github.com'.insteadOf", s.username, s.token), "'https://github.com'")
 	if err != nil {
 		s.notifyPr(owner, repo, pr, gitter.messages)
 		return err
 	}
-	
+
 	logrus.Infof("pushing %s", backportBranchName)
 	_, err = gitter.executeGit(path, "push", "origin", backportBranchName)
 	if err != nil {
