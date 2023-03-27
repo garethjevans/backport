@@ -146,6 +146,16 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 		return err
 	}
 
+	// before we try to push, lets take a look at our local git config
+	gc := filepath.Join(path, ".git", "config")
+	b, err := os.ReadFile(gc)
+	if err != nil {
+		s.notifyPr(owner, repo, pr, gitter.messages)
+		return err
+	}
+
+	logrus.Infof(".git/config is %s", string(b))
+
 	logrus.Infof("pushing %s", backportBranchName)
 	_, err = gitter.executeGit(path, "push", "origin", backportBranchName)
 	if err != nil {
