@@ -233,7 +233,7 @@ func (o *Controller) handlePullRequestCommentEvent(l *logrus.Entry, hook scm.Pul
 	body := hook.Comment.Body
 
 	parts := strings.Split(hook.Repo.FullName, "/")
-	err := o.handleComment(l, "https://github.com", parts[0], parts[1], body, hook.PullRequest.Number)
+	err := o.HandleComment(l, "https://github.com", parts[0], parts[1], body, hook.PullRequest.Number)
 	if err != nil {
 		logrus.Errorf("Unable to handle PR comment: %v", err)
 	}
@@ -246,33 +246,54 @@ func (o *Controller) handleIssueCommentEvent(l *logrus.Entry, hook scm.IssueComm
 	body := hook.Comment.Body
 
 	parts := strings.Split(hook.Repo.FullName, "/")
-	err := o.handleComment(l, "https://github.com", parts[0], parts[1], body, hook.Issue.Number)
+	err := o.HandleComment(l, "https://github.com", parts[0], parts[1], body, hook.Issue.Number)
 	if err != nil {
 		logrus.Errorf("Unable to handle issue comment: %v", err)
 	}
 }
 
-func (o *Controller) handleComment(l *logrus.Entry, host string, owner string, repo string, body string, pr int) error {
-	commentLines := strings.Split(body, "\n")
-	for _, line := range commentLines {
-		if strings.HasPrefix(line, "/backport") {
-			branch := strings.TrimPrefix(line, "/backport ")
-			l.Infof("we are interested in this line '%s' on PR-%d - backporting to branch %s", line, pr, branch)
-			err := o.notifyPr(l, host, owner, repo, pr, branch)
-			if err != nil {
-				return err
-			}
-		}
+func (o *Controller) HandleComment(l *logrus.Entry, host string, owner string, repo string, body string, pr int) error {
+	labels, messages, err := DetermineLabelsToAddFromComment(body, newLabelLister(host, owner, repo))
+	if err != nil {
+		return err
+	}
 
-		// we should remove this later
-		if line == "/test-backport" {
-			err := o.applyBackports(l, "https://github.com", owner, repo, pr)
-			if err != nil {
-				logrus.Errorf("Unable to apply backports %v", err)
-			}
+	for _, label := range labels {
+		err := o.addLabelToPr(l, host, owner, repo, pr, label)
+		if err != nil {
+			return err
 		}
 	}
+
+	for _, message := range messages {
+		err := o.addCommentToPr(l, host, owner, repo, pr, message)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func newLabelLister(host string, owner string, repo string) Lister {
+	return &labelLister{host: host, owner: owner, repo: repo}
+}
+
+type labelLister struct {
+	host  string
+	owner string
+	repo  string
+}
+
+func (l *labelLister) Branches() ([]string, error) {
+	k := service.NewKubernetes()
+	u, t, err := k.GetCredentials(l.host)
+	if err != nil {
+		return nil, err
+	}
+
+	s := service.NewScm(l.host, u, t)
+	return s.ListBranchesForRepo(l.owner, l.repo)
 }
 
 func (o *Controller) applyBackports(l *logrus.Entry, host string, owner string, repo string, pr int) error {
@@ -324,7 +345,7 @@ func (o *Controller) handlePullRequestEvent(l *logrus.Entry, hook *scm.PullReque
 	}
 }
 
-func (o *Controller) notifyPr(l *logrus.Entry, host string, owner string, repo string, pr int, branch string) error {
+func (o *Controller) addLabelToPr(l *logrus.Entry, host string, owner string, repo string, pr int, label string) error {
 	k := service.NewKubernetes()
 	u, t, err := k.GetCredentials(host)
 	if err != nil {
@@ -334,12 +355,67 @@ func (o *Controller) notifyPr(l *logrus.Entry, host string, owner string, repo s
 	l.Debugf("username=%s, password=XXX", u)
 
 	s := service.NewScm(host, u, t)
-	err = s.AddBranchLabelToPr(owner, repo, pr, branch)
+
+	err = s.AddLabelToPr(owner, repo, pr, label)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (o *Controller) addCommentToPr(l *logrus.Entry, host string, owner string, repo string, pr int, message string) error {
+	k := service.NewKubernetes()
+	u, t, err := k.GetCredentials(host)
+	if err != nil {
+		return err
+	}
+
+	l.Debugf("username=%s, password=XXX", u)
+
+	s := service.NewScm(host, u, t)
+
+	err = s.AddCommentToPr(owner, repo, pr, message)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func DetermineLabelsToAddFromComment(body string, lister Lister) ([]string, []string, error) {
+	var messages []string
+	var labels []string
+
+	existingBranches, err := lister.Branches()
+	if err != nil {
+		return labels, messages, err
+	}
+
+	commentLines := strings.Split(body, "\n")
+	for _, line := range commentLines {
+		if strings.HasPrefix(line, "/backport") {
+			branch := strings.TrimPrefix(line, "/backport ")
+			branch = strings.TrimSpace(branch)
+
+			if contains(existingBranches, branch) {
+				labels = append(labels, fmt.Sprintf("%s%s", service.LabelPrefix, branch))
+			} else {
+				messages = append(messages, fmt.Sprintf("Unable to locate branch %s", branch))
+			}
+		}
+	}
+
+	return labels, messages, nil
+}
+
+func contains(list []string, item string) bool {
+	for _, in := range list {
+		if in == item {
+			return true
+		}
+	}
+	return false
 }
 
 func responseHTTPError(w http.ResponseWriter, statusCode int, response string) {
@@ -348,4 +424,8 @@ func responseHTTPError(w http.ResponseWriter, statusCode int, response string) {
 		"status-code": statusCode,
 	}).Info(response)
 	http.Error(w, response, statusCode)
+}
+
+type Lister interface {
+	Branches() ([]string, error)
 }

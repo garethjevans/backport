@@ -1,19 +1,24 @@
-package service
+package service_test
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/garethjevans/backport/pkg/service"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGitter(t *testing.T) {
-	gitter := newGitter()
-	t.Logf("messages: %s", gitter.messages)
+	gitter := service.NewGitter()
+	t.Logf("Messages: %s", gitter.Messages)
 
-	gitter.executeGit(".", "status")
-	t.Logf("messages: %s", gitter.messages)
+	_, err := gitter.ExecuteGit(".", "status")
+	assert.NoError(t, err)
+	t.Logf("Messages: %s", gitter.Messages)
 
-	gitter.executeGit(".", "diff")
-	t.Logf("messages: %s", gitter.messages)
+	_, err = gitter.ExecuteGit(".", "diff")
+	assert.NoError(t, err)
+	t.Logf("Messages: %s", gitter.Messages)
 
-	assert.Equal(t, len(gitter.messages), 5)
+	assert.Equal(t, len(gitter.Messages), 5)
 }
