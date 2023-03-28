@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,15 +17,17 @@ import (
 )
 
 const (
+	LabelPrefix = "Backport to "
 	black       = "000000"
-	labelPrefix = "Backport to "
 )
 
 type Scm interface {
 	ListCommitsForPr(owner string, repo string, pr int) ([]string, error)
 	DetermineBranchesForPr(owner string, repo string, pr int) ([]string, error)
 	ApplyCommitsToRepo(owner string, repo string, pr int, branch string, commits []string) error
-	AddBranchLabelToPr(owner string, repo string, pr int, branch string) error
+	ListBranchesForRepo(owner string, repo string) ([]string, error)
+	AddCommentToPr(owner string, repo string, pr int, comment string) error
+	AddLabelToPr(owner string, repo string, pr int, label string) error
 }
 
 type scmImpl struct {
@@ -73,8 +76,8 @@ func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]s
 
 	var branches []string
 	for _, label := range pullRequest.Labels {
-		if strings.HasPrefix(label.Name, labelPrefix) {
-			branches = append(branches, strings.TrimPrefix(label.Name, labelPrefix))
+		if strings.HasPrefix(label.Name, LabelPrefix) {
+			branches = append(branches, strings.TrimPrefix(label.Name, LabelPrefix))
 		}
 	}
 
@@ -82,7 +85,7 @@ func (s *scmImpl) DetermineBranchesForPr(owner string, repo string, pr int) ([]s
 }
 
 func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch string, commits []string) error {
-	gitter := newGitter()
+	gitter := NewGitter()
 
 	logrus.Infof("Applying commits to repo for %s/%s/pulls/%d", owner, repo, pr)
 	// clone repository to a temporary directory
@@ -95,46 +98,52 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	logrus.Infof("running in directory %s", file)
 
 	gitURL := fmt.Sprintf("%s/%s/%s", s.host, owner, repo)
-	_, err = gitter.executeGit(file, "clone", gitURL)
+	_, err = gitter.ExecuteGit(file, "clone", gitURL)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter.messages)
+		gitter.Messages = append(gitter.Messages, "```")
+		_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 		return err
 	}
 
 	path := filepath.Join(file, repo)
 
-	_, err = gitter.executeGit(path, "checkout", branch)
+	_, err = gitter.ExecuteGit(path, "checkout", branch)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter.messages)
+		gitter.Messages = append(gitter.Messages, "```")
+		_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 		return err
 	}
 
 	// determine a unique branch name
 	backportBranchName := fmt.Sprintf("backport-PR-%d-to-%s", pr, branch)
-	_, err = gitter.executeGit(path, "checkout", "-b", backportBranchName)
+	_, err = gitter.ExecuteGit(path, "checkout", "-b", backportBranchName)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter.messages)
+		gitter.Messages = append(gitter.Messages, "```")
+		_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 		return err
 	}
 
-	_, err = gitter.executeGit(path, "config", "user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
+	_, err = gitter.ExecuteGit(path, "config", "user.email", fmt.Sprintf("%s@users.noreply.github.com", s.username))
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter.messages)
+		gitter.Messages = append(gitter.Messages, "```")
+		_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 		return err
 	}
 
-	_, err = gitter.executeGit(path, "config", "user.name", s.username)
+	_, err = gitter.ExecuteGit(path, "config", "user.name", s.username)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter.messages)
+		gitter.Messages = append(gitter.Messages, "```")
+		_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 		return err
 	}
 
 	// apply commits in order
 	for _, commit := range commits {
 		logrus.Infof("cherry-picking %s", commit)
-		_, err = gitter.executeGit(path, "cherry-pick", commit)
+		_, err = gitter.ExecuteGit(path, "cherry-pick", commit)
 		if err != nil {
-			s.notifyPr(owner, repo, pr, gitter.messages)
+			gitter.Messages = append(gitter.Messages, "```")
+			_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 			return err
 		}
 	}
@@ -142,24 +151,16 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 	// don't use the gitter to avoid logging
 	_, err = executeGit(path, "config", fmt.Sprintf("url.https://%s:%s@github.com.insteadOf", s.username, s.token), "https://github.com")
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter.messages)
+		gitter.Messages = append(gitter.Messages, "```")
+		_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 		return err
 	}
 
-	// before we try to push, lets take a look at our local git config
-	//gc := filepath.Join(path, ".git", "config")
-	//b, err := os.ReadFile(gc)
-	//if err != nil {
-	//	s.notifyPr(owner, repo, pr, gitter.messages)
-	//	return err
-	//}
-	//
-	//fmt.Printf(".git/config is \n\n%s\n\n", string(b))
-
 	logrus.Infof("pushing %s", backportBranchName)
-	_, err = gitter.executeGit(path, "push", "origin", backportBranchName)
+	_, err = gitter.ExecuteGit(path, "push", "origin", backportBranchName)
 	if err != nil {
-		s.notifyPr(owner, repo, pr, gitter.messages)
+		gitter.Messages = append(gitter.Messages, "```")
+		_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 		return err
 	}
 
@@ -173,27 +174,27 @@ func (s *scmImpl) ApplyCommitsToRepo(owner string, repo string, pr int, branch s
 
 	pullRequest, _, err := s.client.PullRequests.Create(context.Background(), fmt.Sprintf("%s/%s", owner, repo), &prInput)
 	if err != nil {
-		gitter.messages = append(gitter.messages, fmt.Sprintf("Created PR %s/%s/%s/pulls/%d", s.host, owner, repo, pullRequest.Number))
-		s.notifyPr(owner, repo, pr, gitter.messages)
+		gitter.Messages = append(gitter.Messages, "```")
+		_ = s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 		return err
 	}
 
-	// if this fails at any point, create an issue on the repo with labels and the error message
-	s.notifyPr(owner, repo, pr, gitter.messages)
+	gitter.Messages = append(gitter.Messages, "```")
+	gitter.Messages = append(gitter.Messages, fmt.Sprintf("Created PR %s/%s/%s/pulls/%d", s.host, owner, repo, pullRequest.Number))
 
-	return nil
+	// if this fails at any point, create an issue on the repo with labels and the error message
+
+	return s.AddCommentToPr(owner, repo, pr, strings.Join(gitter.Messages, "\n"))
 }
 
-func (s *scmImpl) notifyPr(owner string, repo string, pr int, messages []string) error {
-	messages = append(messages, "```")
+func (s *scmImpl) AddCommentToPr(owner string, repo string, pr int, comment string) error {
 	_, _, err := s.client.PullRequests.CreateComment(context.Background(), fmt.Sprintf("%s/%s", owner, repo), pr, &scm.CommentInput{
-		Body: strings.Join(messages, "\n"),
+		Body: comment,
 	})
 	return err
 }
 
-func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch string) error {
-	labelName := fmt.Sprintf("%s%s", labelPrefix, branch)
+func (s *scmImpl) AddLabelToPr(owner string, repo string, pr int, labelName string) error {
 	logrus.Infof("Applying label %s to repo for %s/%s/pulls/%d", labelName, owner, repo, pr)
 
 	labels, _, err := s.client.Repositories.ListLabels(context.Background(), fmt.Sprintf("%s/%s", owner, repo), &scm.ListOptions{})
@@ -209,11 +210,10 @@ func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch s
 	}
 
 	if !exists {
-		path := fmt.Sprintf("repos/%s/labels", fmt.Sprintf("%s/%s", owner, repo))
+		path := fmt.Sprintf("repos/%s/%s/labels", owner, repo)
 		data, err := json.Marshal(label{
-			name:        labelName,
-			description: fmt.Sprintf("When this PR is merged, backport this to %s", branch),
-			color:       black,
+			name:  labelName,
+			color: black,
 		})
 		if err != nil {
 			return err
@@ -233,10 +233,40 @@ func (s *scmImpl) AddBranchLabelToPr(owner string, repo string, pr int, branch s
 	return nil
 }
 
+func (s *scmImpl) ListBranchesForRepo(owner string, repo string) ([]string, error) {
+	var branchesToReturn []string
+	path := fmt.Sprintf("repos/%s/%s/branches", owner, repo)
+	req := &scm.Request{Method: "GET", Path: path, Body: nil}
+	resp, err := s.client.Do(context.Background(), req)
+	if err != nil {
+		return branchesToReturn, err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return branchesToReturn, err
+	}
+
+	var branches []branch
+	err = json.Unmarshal(body, &branches)
+	if err != nil {
+		return branchesToReturn, err
+	}
+
+	for _, branch := range branches {
+		branchesToReturn = append(branchesToReturn, branch.name)
+	}
+
+	return branchesToReturn, nil
+}
+
 type label struct {
-	name        string
-	description string
-	color       string
+	name  string
+	color string
+}
+
+type branch struct {
+	name string
 }
 
 func executeGit(dir string, args ...string) (string, error) {
@@ -248,20 +278,20 @@ func executeGit(dir string, args ...string) (string, error) {
 	return string(stdout), err
 }
 
-func newGitter() observableGitter {
+func NewGitter() observableGitter {
 	return observableGitter{
-		messages: []string{"```"},
+		Messages: []string{"```"},
 	}
 }
 
 type observableGitter struct {
-	messages []string
+	Messages []string
 }
 
-func (o *observableGitter) executeGit(dir string, args ...string) (string, error) {
-	o.messages = append(o.messages, fmt.Sprintf("git %s", strings.Join(args, " ")))
+func (o *observableGitter) ExecuteGit(dir string, args ...string) (string, error) {
+	o.Messages = append(o.Messages, fmt.Sprintf("git %s", strings.Join(args, " ")))
 	output, err := executeGit(dir, args...)
-	o.messages = append(o.messages, output)
+	o.Messages = append(o.Messages, output)
 
 	return output, err
 }
