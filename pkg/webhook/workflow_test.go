@@ -5,7 +5,6 @@ import (
 
 	"github.com/garethjevans/backport/pkg/webhook"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,12 +42,6 @@ func TestWorkflow(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.body, func(t *testing.T) {
-			c := webhook.Controller{}
-			l := logrus.WithField("x", "y")
-
-			err := c.HandleComment(l, "", "owner", "repo", test.body, 1)
-			assert.NoError(t, err)
-
 			labels, messages, err := webhook.DetermineLabelsToAddFromComment(test.body, &fakeLister{
 				branches: test.existingBranches,
 			})
