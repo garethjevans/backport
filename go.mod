@@ -1,11 +1,11 @@
 module github.com/garethjevans/backport
 
-go 1.21
+go 1.23
 
 require (
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/jenkins-x/go-scm v1.13.9
-	github.com/sirupsen/logrus v1.9.4
+	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
 	k8s.io/apimachinery v0.29.0
 	k8s.io/client-go v0.29.0
